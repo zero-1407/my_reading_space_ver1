@@ -1,0 +1,15 @@
+{
+  "name": "dot-seojae",
+  "version": "0.1.0",
+  "private": true,
+  "description": "도트 서재 — 도트 아바타로 걸어다니는 독서모임 마을",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "icons": "node tools/make-icons.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

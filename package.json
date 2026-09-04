@@ -1,0 +1,14 @@
+{
+  "name": "my-reading-space",
+  "version": "0.1.0",
+  "private": true,
+  "description": "도트 서재 — 도트 아바타로 걸어다니는 독서모임 마을",
+  "scripts": {
+    "start": "node prototype/server.js",
+    "dev": "node prototype/server.js",
+    "icons": "node prototype/tools/make-icons.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
