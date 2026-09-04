@@ -78,7 +78,11 @@ function get(url) {
         ? resolve(body) : reject(new Error('HTTP ' + res.statusCode + ' — ' + body.slice(0, 160))));
     });
     req.on('timeout', () => req.destroy(new Error('시간 초과')));
-    req.on('error', reject);
+    req.on('error', e => {
+      // Render 같은 해외 서버에서는 국내 공공기관 도메인이 안 잡히는 일이 있다
+      if (e.code === 'ENOTFOUND') return reject(new Error('주소를 못 찾았습니다 (' + e.hostname + ')'));
+      reject(e);
+    });
   });
 }
 
