@@ -23,6 +23,40 @@
     --paper:#FBF3E2; --paper-ln:#D4C4A4; --paper-ink:#4A3F2E;
   }
   * { margin:0; padding:0; box-sizing:border-box; }
+
+  /* ═══ 시작 화면 ═══ */
+  #gate { position:fixed; inset:0; z-index:900; background:var(--bg);
+          display:flex; align-items:center; justify-content:center; padding:20px;
+          overflow:auto; }
+  #gate.gone { display:none; }
+  .gate-card { width:400px; max-width:100%; background:var(--panel);
+               border:1px solid var(--line2); border-radius:14px; padding:30px 30px 26px;
+               box-shadow:0 16px 44px rgba(90,70,45,.2); text-align:center; }
+  .gate-ill { display:flex; justify-content:center; margin-bottom:16px; }
+  #gate-cv { image-rendering:pixelated; width:120px; height:120px;
+             border-radius:12px; border:1px solid var(--line2); }
+  .gate-card h1 { font-size:26px; letter-spacing:-.02em; margin-bottom:8px; }
+  .gate-sub { font-size:12.5px; color:var(--ink3); line-height:1.85; margin-bottom:20px; }
+  .gate-tabs { display:flex; gap:6px; margin-bottom:14px; }
+  .gt { flex:1; font-family:inherit; font-size:13px; padding:9px; border-radius:8px;
+        background:#fff; border:1px solid var(--line2); color:var(--ink2); cursor:pointer; transition:.14s; }
+  .gt:hover { border-color:var(--amber); }
+  .gt.on { background:var(--amber); border-color:var(--amber); color:#fff; font-weight:700; }
+  .gate-form { display:flex; flex-direction:column; gap:8px; }
+  .gate-form input { padding:11px 13px; font-size:13.5px; font-family:inherit;
+                     background:#fff; border:1px solid var(--line2); border-radius:8px; color:var(--ink); }
+  .gate-form input:focus { outline:none; border-color:var(--amber); }
+  .gate-msg { font-size:12px; min-height:17px; color:var(--rose); text-align:left; }
+  .gate-msg.ok { color:var(--sage); }
+  .gate-go { padding:12px; font-family:inherit; font-size:14px; font-weight:700; border-radius:8px;
+             background:var(--amber); border:1px solid var(--amber); color:#fff; cursor:pointer; }
+  .gate-go:hover { background:#A4712E; }
+  .gate-go:disabled { opacity:.55; cursor:default; }
+  .gate-guest { padding:9px; font-family:inherit; font-size:12px; border-radius:8px;
+                background:transparent; border:1px solid var(--line); color:var(--ink3); cursor:pointer; }
+  .gate-guest:hover { border-color:var(--ink3); color:var(--ink2); }
+  .gate-note { font-size:11px; color:var(--ink3); margin-top:14px; line-height:1.7; }
+
   /* 오류가 나면 조용히 죽지 말고 화면에 내놓는다 */
   #crash { display:none; position:fixed; inset:12px 12px auto 12px; z-index:999;
            background:#FFF1EE; border:2px solid #C4564E; border-radius:9px;
@@ -665,6 +699,30 @@
 </head>
 <body>
 
+<div id="gate">
+  <div class="gate-card">
+    <div class="gate-ill"><canvas id="gate-cv" width="192" height="192"></canvas></div>
+    <h1>도트 서재</h1>
+    <p class="gate-sub">도트 아바타로 걸어다니는 독서모임 마을.<br>
+      내 방에 책을 꽂고, 남의 책장을 구경하고, 문장은 참새에 실어 보냅니다.</p>
+
+    <div class="gate-tabs">
+      <button class="gt on" data-tab="login">로그인</button>
+      <button class="gt" data-tab="signup">처음이에요</button>
+    </div>
+
+    <div class="gate-form">
+      <input id="g-id" type="text" placeholder="아이디 (영문·숫자 3~20자)" autocomplete="username">
+      <input id="g-pw" type="password" placeholder="비밀번호 (여섯 자 이상)" autocomplete="current-password">
+      <input id="g-who" type="text" placeholder="마을에서 쓸 이름" autocomplete="nickname" maxlength="16">
+      <div class="gate-msg" id="g-msg"></div>
+      <button class="gate-go" id="g-go">들어가기</button>
+      <button class="gate-guest" id="g-guest">계정 없이 둘러보기</button>
+    </div>
+    <div class="gate-note" id="g-note"></div>
+  </div>
+</div>
+
 <div id="crash">
   <b>화면이 멈췄어요 — 오류를 그대로 적었습니다</b>
   <pre id="crash-msg"></pre>
@@ -1039,6 +1097,7 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
 <script src="js/expo.js"></script>
 <script src="js/news.js"></script>
 <script src="js/net.js"></script>
+<script src="js/gate.js"></script>
 <script src="js/weather.js"></script>
 <script src="js/data.js"></script>
 <script src="js/game.js"></script>

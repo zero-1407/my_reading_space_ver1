@@ -3978,12 +3978,16 @@ spawnTown(); scatterDrops(); spawnLive();
 renderDex(); refreshUI(); buildTrackList(); renderAcct();
 renderPocket(); renderDateTime(); applyAmbience();
 
-// 서버가 있으면 연결하고 내 방을 올려둔다. 없으면 조용히 혼자 모드.
+// 시작 화면 — 로그인하거나 둘러보기로 들어온 뒤에 마을이 열린다
 Net.onChange(() => { if (openOv === 'visit') renderVisit(); });
-Net.connect(ROOMS[0].who).then(ok => {
-  if (!ok) return;
-  syncRoom();
-  toast('🚪 연결됐어요 · 내 코드는 ' + Net.code + ' 입니다');
+Gate.open(() => {
+  if (Net.online) {
+    if (Net.who) { ROOMS[0].who = Net.who; refreshUI(); }
+    syncRoom();
+    toast('🚪 ' + (Net.who || '') + ' 님, 내 코드는 ' + Net.code + ' 입니다');
+  } else {
+    toast('혼자 모드로 들어왔어요 · 친구와 함께하려면 서버를 켜주세요');
+  }
 });
 setInterval(() => { if (Net.online) syncRoom(); }, 30000);   // 놓친 변경 대비
 addEventListener('beforeunload', () => { if (Net.online) Net.push(snapshot()); });

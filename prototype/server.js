@@ -1,4 +1,4 @@
-// ════════════════════════════════════════════════════════════════
+﻿// ════════════════════════════════════════════════════════════════
 //  도트 서재 — 개발용 서버 겸 API 프록시
 //
 //   1) prototype 폴더를 정적으로 서빙한다
@@ -32,9 +32,13 @@ const { URL } = require('url');
 const store = require('./store');
 
 const PORT = process.env.PORT || 5173;
-const KEY  = process.env.KCISA_KEY || '';
 const ROOT = __dirname;
 
+// 활용신청을 따로 하면 키도 따로 나온다. 하나만 있으면 그걸 둘 다 쓴다.
+const KEYS = {
+  expo:  process.env.KCISA_EXPO_KEY  || process.env.KCISA_KEY || '',
+  books: process.env.KCISA_BOOKS_KEY || process.env.KCISA_KEY || '',
+};
 const API = {
   expo:  'https://api.kcisa.kr/openapi/API_CCA_145/request',   // 전시정보(통합)
   books: 'https://api.kcisa.kr/openapi/API_LIB_051/request',   // 기관별 도서정보
@@ -196,8 +200,9 @@ const TTL = 1000 * 60 * 60 * 6;
 async function load(kind, rows) {
   const hit = cache[kind];
   if (hit && Date.now() - hit.at < TTL) return hit.data;
-  if (!KEY) throw new Error('KCISA_KEY 가 비어 있습니다');
-  const qs = new URLSearchParams({ serviceKey: KEY, numOfRows: String(rows), pageNo: '1' });
+  const key = KEYS[kind];
+  if (!key) throw new Error((kind === 'expo' ? 'KCISA_EXPO_KEY' : 'KCISA_BOOKS_KEY') + ' 가 비어 있습니다');
+  const qs = new URLSearchParams({ serviceKey: key, numOfRows: String(rows), pageNo: '1' });
   const raw = await get(API[kind] + '?' + qs);
   const data = (kind === 'expo' ? normExpo : normBooks)(toItems(raw));
   cache[kind] = { at: Date.now(), data };
@@ -223,16 +228,38 @@ function body(req) {
 async function api(req, res, u) {
   const p = u.pathname, send = o => res.end(JSON.stringify(o));
 
-  if (p === '/api/me' && req.method === 'POST') {          // 처음 들어온 사람
+  if (p === '/api/signup' && req.method === 'POST') {      // 가입
     const b = await body(req);
-    if (b.code && b.secret && store.auth(b.code, b.secret)) return send({ ok:true, ...b, known:true });
-    const id = store.create(b.who);
-    console.log('[store] 새 사람 ' + id.code);
-    return send({ ok:true, ...id, known:false });
+    try {
+      const u = store.signup(b.id, b.pw, b.who);
+      console.log('[계정] 가입 ' + u.id + ' → ' + u.code);
+      return send({ ok:true, ...u });
+    } catch (e) { res.statusCode = 400; return send({ ok:false, reason:e.message }); }
+  }
+  if (p === '/api/login' && req.method === 'POST') {       // 로그인
+    const b = await body(req);
+    try { return send({ ok:true, ...store.login(b.id, b.pw) }); }
+    catch (e) { res.statusCode = 401; return send({ ok:false, reason:e.message }); }
+  }
+  if (p === '/api/me' && req.method === 'POST') {          // 열쇠가 아직 쓸모 있나
+    const b = await body(req);
+    if (b.code && b.token && store.auth(b.code, b.token))
+      return send({ ok:true, ...store.whoAmI(b.code), token:b.token, known:true });
+    if (b.guest) {                                        // 로그인 없이 둘러보기
+      const u = store.create(b.who);
+      return send({ ok:true, ...u, guest:true, known:false });
+    }
+    res.statusCode = 401; return send({ ok:false, reason:'다시 로그인해 주세요' });
+  }
+  if (p === '/api/rename' && req.method === 'POST') {
+    const b = await body(req);
+    if (!store.auth(b.code, b.token)) { res.statusCode = 403; return send({ ok:false, reason:'권한 없음' }); }
+    store.rename(b.code, b.who);
+    return send({ ok:true, ...store.whoAmI(b.code) });
   }
   if (p === '/api/room' && req.method === 'PUT') {         // 내 방 저장
     const b = await body(req);
-    if (!store.auth(b.code, b.secret)) { res.statusCode = 403; return send({ ok:false, reason:'권한 없음' }); }
+    if (!store.auth(b.code, b.token)) { res.statusCode = 403; return send({ ok:false, reason:'권한 없음' }); }
     store.putRoom(b.code, b.room || {});
     return send({ ok:true });
   }
@@ -245,7 +272,7 @@ async function api(req, res, u) {
   }
   if (p === '/api/friend' && req.method === 'POST') {      // 친구 맺기
     const b = await body(req);
-    if (!store.auth(b.code, b.secret)) { res.statusCode = 403; return send({ ok:false, reason:'권한 없음' }); }
+    if (!store.auth(b.code, b.token)) { res.statusCode = 403; return send({ ok:false, reason:'권한 없음' }); }
     if (!store.exists(b.friend)) { res.statusCode = 404; return send({ ok:false, reason:'그런 코드는 없어요' }); }
     store.addFriend(b.code, b.friend);
     return send({ ok:true, friends: store.friendsOf(b.code) });
@@ -263,7 +290,7 @@ async function api(req, res, u) {
 http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://localhost');
 
-  if (/^\/api\/(me|room|friend|friends|people)(\/|$)/.test(u.pathname)) {
+  if (/^\/api\/(me|signup|login|rename|room|friend|friends|people)(\/|$)/.test(u.pathname)) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,OPTIONS');
@@ -301,6 +328,7 @@ http.createServer(async (req, res) => {
   });
 }).listen(PORT, () => {
   console.log('도트 서재 → http://localhost:' + PORT);
-  console.log(KEY ? '인증키 : 있음 — 전시·도서를 실제로 받아옵니다'
-                  : '인증키 : 없음 → 예비 자료로 돕니다.  $env:KCISA_KEY="키" 로 넣어주세요');
+  console.log('  전시 API : ' + (KEYS.expo  ? '키 있음' : '키 없음 (예비 자료)'));
+  console.log('  도서 API : ' + (KEYS.books ? '키 있음' : '키 없음 (예비 자료)'));
+  console.log('  신문     : 키 불필요');
 });

@@ -16,7 +16,7 @@ const crypto = require('crypto');
 const DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const FILE = path.join(DIR, 'store.json');
 
-let db = { users: {}, rooms: {}, friends: {} };
+let db = { users: {}, rooms: {}, friends: {}, byId: {} };
 let dirty = false;
 
 function load() {
@@ -69,19 +69,55 @@ function newCode() {
   return 'ROOM-' + rnd(3).toUpperCase();
 }
 
+// 비밀번호는 절대 그대로 두지 않는다. 소금을 치고 scrypt 로 굳힌다.
+function hash(pw, salt) { return crypto.scryptSync(pw, salt, 32).toString('hex'); }
+const norm = s => String(s || '').trim().toLowerCase();
+
 module.exports = {
-  // 처음 들어온 사람에게 코드와 비밀키를 발급한다.
-  // 코드는 남에게 알려주는 것, 비밀키는 그 브라우저에만 둔다.
-  create(who) {
-    const code = newCode(), secret = rnd(24);
-    db.users[code] = { code, secret, who: who || '이름 없는 사람', at: Date.now() };
+  // 가입 — 아이디와 비밀번호로 계정을 만든다
+  signup(loginId, pw, who) {
+    const id = norm(loginId);
+    if (!/^[a-z0-9_.-]{3,20}$/.test(id)) throw new Error('아이디는 영문·숫자 3~20자로 지어주세요');
+    if (String(pw || '').length < 6) throw new Error('비밀번호는 여섯 자 이상으로 해주세요');
+    if (db.byId[id]) throw new Error('이미 있는 아이디예요');
+    const code = newCode(), salt = rnd(16), token = rnd(24);
+    db.users[code] = { code, id, salt, pw: hash(pw, salt), token,
+                       who: (who || '').trim() || id, at: Date.now() };
+    db.byId[id] = code;
     db.friends[code] = [];
     touch();
-    return { code, secret };
+    return { code, token, who: db.users[code].who, id };
   },
-  auth(code, secret) {
+  // 로그인 — 어느 기기에서도 내 방으로 돌아올 수 있게
+  login(loginId, pw) {
+    const code = db.byId[norm(loginId)];
+    const u = code && db.users[code];
+    if (!u || u.pw !== hash(pw, u.salt)) throw new Error('아이디나 비밀번호가 맞지 않아요');
+    u.token = rnd(24);                       // 로그인할 때마다 새 열쇠
+    touch();
+    return { code: u.code, token: u.token, who: u.who, id: u.id };
+  },
+  // 예전 방식(익명 코드)도 그대로 받아준다
+  create(who) {
+    const code = newCode(), token = rnd(24);
+    db.users[code] = { code, token, who: who || '이름 없는 사람', at: Date.now() };
+    db.friends[code] = [];
+    touch();
+    return { code, token };
+  },
+  auth(code, token) {
     const u = db.users[code];
-    return !!(u && secret && u.secret === secret);
+    return !!(u && token && u.token === token);
+  },
+  whoAmI(code) {
+    const u = db.users[code];
+    return u ? { code: u.code, who: u.who, id: u.id || null } : null;
+  },
+  rename(code, who) {
+    const u = db.users[code];
+    if (!u) return false;
+    u.who = String(who || '').trim().slice(0, 16) || u.who;
+    touch(); return true;
   },
   exists(code) { return !!db.users[code]; },
 
