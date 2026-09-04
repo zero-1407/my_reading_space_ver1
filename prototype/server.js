@@ -29,6 +29,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { URL } = require('url');
+const store = require('./store');
 
 const PORT = process.env.PORT || 5173;
 const KEY  = process.env.KCISA_KEY || '';
@@ -204,9 +205,75 @@ async function load(kind, rows) {
   return data;
 }
 
+// ── 친구와 방 ────────────────────────────────────────────────
+//  코드는 남에게 알려주는 것, 비밀키는 그 사람 브라우저에만 있다.
+//  방을 고치려면 비밀키가 필요하고, 구경은 코드만 있으면 된다.
+function body(req) {
+  return new Promise((resolve, reject) => {
+    let s = '', n = 0;
+    req.on('data', c => {
+      n += c.length;
+      if (n > 2 * 1024 * 1024) { reject(new Error('너무 큽니다 (2MB 넘음)')); req.destroy(); return; }
+      s += c;
+    });
+    req.on('end', () => { try { resolve(s ? JSON.parse(s) : {}); } catch (e) { reject(new Error('JSON 아님')); } });
+    req.on('error', reject);
+  });
+}
+async function api(req, res, u) {
+  const p = u.pathname, send = o => res.end(JSON.stringify(o));
+
+  if (p === '/api/me' && req.method === 'POST') {          // 처음 들어온 사람
+    const b = await body(req);
+    if (b.code && b.secret && store.auth(b.code, b.secret)) return send({ ok:true, ...b, known:true });
+    const id = store.create(b.who);
+    console.log('[store] 새 사람 ' + id.code);
+    return send({ ok:true, ...id, known:false });
+  }
+  if (p === '/api/room' && req.method === 'PUT') {         // 내 방 저장
+    const b = await body(req);
+    if (!store.auth(b.code, b.secret)) { res.statusCode = 403; return send({ ok:false, reason:'권한 없음' }); }
+    store.putRoom(b.code, b.room || {});
+    return send({ ok:true });
+  }
+  let m = p.match(/^\/api\/room\/([\w-]+)$/);              // 남의 방 구경
+  if (m && req.method === 'GET') {
+    const r = store.getRoom(m[1]);
+    if (!r) { res.statusCode = 404; return send({ ok:false, reason:'그런 방이 없어요' }); }
+    const { code, ...rest } = r;
+    return send({ ok:true, room:{ ...rest, code } });
+  }
+  if (p === '/api/friend' && req.method === 'POST') {      // 친구 맺기
+    const b = await body(req);
+    if (!store.auth(b.code, b.secret)) { res.statusCode = 403; return send({ ok:false, reason:'권한 없음' }); }
+    if (!store.exists(b.friend)) { res.statusCode = 404; return send({ ok:false, reason:'그런 코드는 없어요' }); }
+    store.addFriend(b.code, b.friend);
+    return send({ ok:true, friends: store.friendsOf(b.code) });
+  }
+  m = p.match(/^\/api\/friends\/([\w-]+)$/);
+  if (m && req.method === 'GET') return send({ ok:true, friends: store.friendsOf(m[1]) });
+
+  if (p === '/api/people' && req.method === 'GET')         // 열려 있는 방들
+    return send({ ok:true, people: store.recent(40), stats: store.stats() });
+
+  res.statusCode = 404; send({ ok:false, reason:'없는 주소' });
+}
+
 // ── 서버 ─────────────────────────────────────────────────────
 http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://localhost');
+
+  if (/^\/api\/(me|room|friend|friends|people)(\/|$)/.test(u.pathname)) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,OPTIONS');
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    if (req.method === 'OPTIONS') { res.statusCode = 204; return res.end(); }
+    try { await api(req, res, u); }
+    catch (e) { res.statusCode = 400; res.end(JSON.stringify({ ok:false, reason:e.message })); }
+    return;
+  }
+
   const m = u.pathname.match(/^\/api\/(expo|books|news)$/);
 
   if (m) {

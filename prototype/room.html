@@ -143,6 +143,14 @@
             background:var(--amber); border:1px solid var(--amber); color:#fff;
             font-weight:700; cursor:pointer; }
   #vs-add:hover { background:#A4712E; }
+  .invite .copy { font-family:inherit; font-size:11.5px; padding:6px 11px; border-radius:6px;
+                  background:#fff; border:1px solid var(--line2); color:var(--ink2); cursor:pointer; }
+  .invite .copy:hover { border-color:var(--amber); color:var(--amber); }
+  #vs-net { font-size:11px; margin-left:auto; }
+  #vs-net.netok { color:var(--sage); }
+  #vs-net.netoff { color:var(--ink3); }
+  .vw code { font-family:'IBM Plex Mono',monospace; background:var(--bg2); padding:0 4px;
+             border-radius:3px; font-size:10.5px; }
   .vlist { overflow-y:auto; display:flex; flex-direction:column; gap:5px; flex:1; min-height:0; }
   .vrow { display:flex; align-items:center; gap:10px; background:#fff;
           border:1px solid var(--line); border-radius:7px; padding:9px 12px; }
@@ -734,8 +742,12 @@
     <div class="cap">방은 누구에게나 열려 있어요. 친구가 아니어도 들어가 볼 수 있습니다.<br>
       <b>구경만 하고 나가면 아무 흔적도 남지 않아요.</b></div>
     <div class="invite">
-      <span class="mycode">내 초대 코드 <b id="vs-code"></b></span>
-      <input id="vs-input" type="text" placeholder="친구 코드 입력" autocomplete="off">
+      <span class="mycode">내 코드 <b id="vs-code"></b></span>
+      <button id="vs-copy" class="copy">복사</button>
+      <span id="vs-net" class="netoff"></span>
+    </div>
+    <div class="invite">
+      <input id="vs-input" type="text" placeholder="친구 코드 입력 (예 BOOK-4821)" autocomplete="off">
       <button id="vs-add">친구 맺기</button>
     </div>
     <div class="vlist" id="vs-list"></div>
@@ -1026,6 +1038,7 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
 <script src="js/season.js"></script>
 <script src="js/expo.js"></script>
 <script src="js/news.js"></script>
+<script src="js/net.js"></script>
 <script src="js/weather.js"></script>
 <script src="js/data.js"></script>
 <script src="js/game.js"></script>

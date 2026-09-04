@@ -19,3 +19,6 @@ desktop.ini
 npm-debug.log*
 tmp/
 .cache/
+
+# 서버가 만드는 저장 파일 (사람 · 방 · 친구 관계)
+prototype/data/

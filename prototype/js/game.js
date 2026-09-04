@@ -1783,47 +1783,137 @@ const myCode = 'SEOJAE-4821';
 let visitOrder = ROOMS.map((_, i) => i).filter(i => i !== 0);   // 내가 정한 순서
 const codeOf = i => ['—','MINJI-1102','DOHYUN-0417','SEOYUN-2930','JUNHO-7715','HANEUL-3388'][i] || '';
 
-function openVisit() { renderVisit(); showOv('visit'); }
+// ── 서버와 주고받기 ───────────────────────────────────────────
+//  방을 통째로 올려두면, 친구가 코드로 찾아와 그대로 구경한다.
+function snapshot() {
+  const R = ROOMS[0];
+  const item2 = it => {
+    const o = { kind:it.kind, x:it.x, y:it.y, w:it.w, h:it.h };
+    if (it.kind === 'shelf') o.books = it.books.map(b2 => ({
+      t:b2.t, a:b2.a, kdc:b2.kdc, col:b2.col, h:b2.h, w:b2.w, note:b2.note,
+      from:b2.from, done:!!b2.done, memos:b2.memos || [], pressed:b2.pressed || [] }));
+    if (it.kind === 'poster') { o.art = it.art; o.title = it.title; o.desc = it.desc;
+      if (it.src && it.src.length < 260000) o.src = it.src; }   // 너무 큰 사진은 빼고 도트만
+    if (it.kind === 'plant') { o.grow = it.grow || 0; o.species = it.species; }
+    return o;
+  };
+  return { who:R.who, bio:R.bio, village:R.village,
+           wall:R.wall, floor:R.floor, wood:R.wood, rug:R.rug, hair:R.hair, shirt:R.shirt,
+           items:R.items.map(item2), visitors:R.visitors.slice(0, 12) };
+}
+let syncT = null;
+function syncRoom() {
+  if (!Net.online) return;
+  clearTimeout(syncT);
+  syncT = setTimeout(() => Net.push(snapshot()), 400);
+}
+function roomFromSnapshot(s) {
+  const R = Object.assign({ type:'private', visitors:s.visitors || [], letters:[], items:[] }, {
+    who:s.who || '이름 없는 사람', bio:s.bio || '', village:s.village || 'seongsu',
+    wall:s.wall || '#8E80AE', floor:s.floor || '#C4A57E', wood:s.wood || '#B08A5E',
+    rug:s.rug || '#C4808E', hair:s.hair || '#7a4f3a', shirt:s.shirt || '#7fa88a',
+    remote:true, code:s.code,
+  });
+  R.items = (s.items || []).map(it => Object.assign({ id: uid++ }, it));
+  if (!vidx(R.village)) R.village = VIL[0].key;
+  layoutRoom(R);
+  return R;
+}
+async function visitCode(code) {
+  try {
+    toast('🚪 ' + code + ' 방을 여는 중…');
+    const s = await Net.room(code);
+    const idx = ROOMS.push(roomFromSnapshot(s)) - 1;
+    enterRoom(idx);
+  } catch (e) { Audio8.play('wrong'); toast('열지 못했어요 — ' + e.message); }
+}
+
+// ── 손님 문 ───────────────────────────────────────────────────
+let netFriends = [], netPeople = [], visitTab = 'friend';
+function openVisit() { renderVisit(); showOv('visit'); refreshVisit(); }
+async function refreshVisit() {
+  if (!Net.online) return;
+  try { netFriends = await Net.friends(); } catch (e) {}
+  try { netPeople = await Net.people(); } catch (e) {}
+  if (openOv === 'visit') renderVisit();
+}
 function renderVisit() {
-  $('vs-code').textContent = myCode;
+  $('vs-code').textContent = Net.online ? Net.code : myCode + ' (혼자 모드)';
+  $('vs-net').textContent = Net.online ? '● 연결됨' : '○ ' + Net.reason;
+  $('vs-net').className = Net.online ? 'netok' : 'netoff';
   const box = $('vs-list'); box.innerHTML = '';
-  visitOrder.forEach((idx, pos) => {
-    const r = ROOMS[idx], v = VIL[vidx(r.village)];
-    const reading = allBooks(r).find(b2 => !b2.done) || allBooks(r)[0];
-    const fr = friends.has(idx);
+
+  const rows = [];
+  if (Net.online) {
+    const fset = new Set(netFriends.map(f => f.code));
+    netFriends.forEach(f => rows.push({ ...f, fr:true }));
+    netPeople.forEach(p => { if (p.code !== Net.code && !fset.has(p.code)) rows.push({ ...p, fr:false }); });
+  } else {
+    visitOrder.forEach(idx => {
+      const r = ROOMS[idx];
+      if (!r || r.remote) return;
+      const reading = allBooks(r).find(b2 => !b2.done) || allBooks(r)[0];
+      rows.push({ local:idx, who:r.who, code:codeOf(idx), fr:friends.has(idx),
+                  village:r.village, books:allBooks(r).length, reading: reading && reading.t });
+    });
+  }
+  if (!rows.length) {
+    box.innerHTML = '<div class="none">' + (Net.online
+      ? '아직 아무도 방을 만들지 않았어요.<br>친구에게 내 코드를 알려주세요.'
+      : '서버를 켜면 진짜 친구와 연결됩니다.') + '</div>';
+    return;
+  }
+  rows.forEach((r, pos) => {
+    const vi2 = r.village ? vidx(r.village) : -1;
+    const v = vi2 >= 0 ? VIL[vi2] : null;
     const el = document.createElement('div');
-    el.className = 'vrow' + (fr ? ' fr' : '');
+    el.className = 'vrow' + (r.fr ? ' fr' : '');
     el.innerHTML =
       '<span class="ord">' + (pos + 1) + '</span>' +
       '<span class="vmain"><span class="vn">' + esc(r.who) +
-        (fr ? '<i class="badge">친구</i>' : '') + '</span>' +
-        '<span class="vw">' + esc(v.name) + ' · ' + esc(v.where) + '</span>' +
-        (reading ? '<span class="vb">📖 ' + esc(reading.t) + '</span>' : '') + '</span>' +
+        (r.fr ? '<i class="badge">친구</i>' : '') + '</span>' +
+        '<span class="vw">' + (v ? esc(v.name) + ' · ' : '') +
+        '<code>' + esc(r.code || '') + '</code>' +
+        (r.books ? ' · 책 ' + r.books + '권' : '') + '</span>' +
+        (r.reading ? '<span class="vb">📖 ' + esc(r.reading) + '</span>' : '') + '</span>' +
       '<span class="vact">' +
-        '<button class="mv" data-d="-1" title="위로">▲</button>' +
-        '<button class="mv" data-d="1" title="아래로">▼</button>' +
+        (r.local !== undefined ? '<button class="mv" data-d="-1">▲</button>' +
+                                 '<button class="mv" data-d="1">▼</button>' : '') +
         '<button class="go2">놀러가기</button></span>';
-    el.querySelector('.go2').onclick = () => enterRoom(idx);
+    el.querySelector('.go2').onclick = () =>
+      r.local !== undefined ? enterRoom(r.local) : visitCode(r.code);
     el.querySelectorAll('.mv').forEach(b2 => b2.onclick = () => {
-      const d = +b2.dataset.d, np = pos + d;
-      if (np < 0 || np >= visitOrder.length) return;
-      const tmp = visitOrder[pos]; visitOrder[pos] = visitOrder[np]; visitOrder[np] = tmp;
+      const d = +b2.dataset.d, from = visitOrder.indexOf(r.local), to = from + d;
+      if (to < 0 || to >= visitOrder.length) return;
+      const tmp = visitOrder[from]; visitOrder[from] = visitOrder[to]; visitOrder[to] = tmp;
       Audio8.play('select'); renderVisit();
     });
     box.appendChild(el);
   });
 }
-$('vs-add').onclick = () => {
+$('vs-add').onclick = async () => {
   const c = $('vs-input').value.trim().toUpperCase();
-  if (!c) { toast('초대 코드를 넣어주세요'); return; }
+  if (!c) { toast('친구 코드를 넣어주세요'); return; }
+  if (Net.online) {
+    try {
+      netFriends = await Net.addFriend(c);
+      $('vs-input').value = ''; Audio8.play('dex'); renderVisit();
+      toast('🚪 친구가 됐어요 · 서로의 손님 문에 이름이 걸립니다');
+    } catch (e) { Audio8.play('wrong'); toast(e.message); }
+    return;
+  }
   const idx = ROOMS.findIndex((_, i) => i !== 0 && codeOf(i) === c);
   if (idx < 0) { toast('그런 코드는 없어요'); Audio8.play('wrong'); return; }
   if (friends.has(idx)) { toast('이미 친구예요'); return; }
   friends.add(idx);
-  visitOrder = [idx].concat(visitOrder.filter(i => i !== idx));   // 새 친구는 맨 위로
-  $('vs-input').value = '';
-  Audio8.play('dex'); renderVisit();
-  toast('🚪 ' + ROOMS[idx].who + '와(과) 친구가 됐어요 · 서로의 손님 문에 이름이 걸립니다');
+  visitOrder = [idx].concat(visitOrder.filter(i => i !== idx));
+  $('vs-input').value = ''; Audio8.play('dex'); renderVisit();
+  toast('🚪 ' + ROOMS[idx].who + '와(과) 친구가 됐어요');
+};
+$('vs-copy').onclick = async () => {
+  const c = Net.online ? Net.code : myCode;
+  try { await navigator.clipboard.writeText(c); toast('내 코드를 복사했어요 — ' + c); }
+  catch (e) { toast('내 코드는 ' + c + ' 입니다'); }
 };
 
 // ── 신문 ──────────────────────────────────────────────────────
@@ -2787,6 +2877,7 @@ function renderDex() {
 function renderStats() {
   $('s-books').textContent  = allBooks(ROOMS[0]).length;
   $('s-borrow').textContent = borrowed.size;
+  syncRoom();                       // 방이 바뀌면 조용히 서버에 올린다
 }
 function renderFlights(now) {
   const el = $('flights'); el.innerHTML = '';
@@ -3886,4 +3977,14 @@ function frame(t) {
 spawnTown(); scatterDrops(); spawnLive();
 renderDex(); refreshUI(); buildTrackList(); renderAcct();
 renderPocket(); renderDateTime(); applyAmbience();
+
+// 서버가 있으면 연결하고 내 방을 올려둔다. 없으면 조용히 혼자 모드.
+Net.onChange(() => { if (openOv === 'visit') renderVisit(); });
+Net.connect(ROOMS[0].who).then(ok => {
+  if (!ok) return;
+  syncRoom();
+  toast('🚪 연결됐어요 · 내 코드는 ' + Net.code + ' 입니다');
+});
+setInterval(() => { if (Net.online) syncRoom(); }, 30000);   // 놓친 변경 대비
+addEventListener('beforeunload', () => { if (Net.online) Net.push(snapshot()); });
 requestAnimationFrame(loop);
