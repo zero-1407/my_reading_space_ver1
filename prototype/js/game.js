@@ -76,59 +76,97 @@ const CAT = { x:352, y:80 };
 const SHOP_W = 320;
 const SHOP_DOOR = { x:10, y:18, w:34, h:52 };
 const SHOP_DESK = { x:150, y:88, w:70, h:20 };
+// 창 하나, 러그 하나는 다섯 가게가 다 같이 쓴다 (drawItem 의 window·rug 와 같은 그림)
+function shopWindow(x, y, w, h) {
+  px(x, y, w, h, '#6E5236');
+  px(x + 3, y + 3, w - 6, h - 6, '#DCF0FA');
+  px(x + 3, y + h * .58, w - 6, h * .5 - 3, '#B2DCF0');
+  px(x + 8, y + 8, 8, 4, '#FFFFFF');
+  px(x + w / 2 - 1, y + 3, 2, h - 6, '#6E5236');
+  px(x + 3, y + h * .48, w - 6, 2, '#6E5236');
+}
+function shopRug(x, y, w, h, c) {
+  px(x, y, w, h, c);
+  px(x + 5, y + 4, w - 10, h - 8, shade(c, 1.18));
+  px(x + 12, y + 9, w - 24, h - 18, c);
+}
 const SHOPS = {
   post: {
-    title:'우체국', wall:'#F0E0D4', floor:'#D8B896', wood:'#B4805A',
+    title:'우체국', wall:'#F0E0D4', floor:'#D8B896', wood:'#B4805A', rug:'#C4645C',
     staff:{ h:'#3a2e28', c:'#C4645C' }, deskLabel:'우편함 확인하기',
     action: () => openPost(),
     decor(t) {
       for (let r = 0; r < 2; r++) for (let c = 0; c < 6; c++)     // 우편함 칸
-        px(20 + c * 18, 26 + r * 20, 15, 17, (r + c) % 2 ? '#E8C46A' : '#F0DFA0');
-      px(18, 24, 110, 2, '#8A6444');
+        px(16 + c * 18, 18 + r * 20, 15, 17, (r + c) % 2 ? '#E8C46A' : '#F0DFA0');
+      px(14, 16, 110, 2, '#8A6444');
+      shopWindow(230, 12, 40, 34);
+      px(20, 96, 16, 14, '#C4A876'); px(40, 100, 14, 10, '#B4986A');       // 바닥에 쌓인 소포
+      px(20, 96, 16, 2, '#8A6444'); px(24, 100, 8, 2, '#6E5238');
     },
   },
   furn: {
-    title:'가구점', wall:'#F0E8D0', floor:'#C8A876', wood:'#8A6A44',
+    title:'가구점', wall:'#F0E8D0', floor:'#C8A876', wood:'#8A6A44', rug:'#B08A5E',
     staff:{ h:'#4a3a2e', c:'#9aa87e' }, deskLabel:'방에 놓을 것 고르기',
     action: () => openFurniture(),
     decor(t) {
-      px(20, 40, 10, 20, '#B08A5E'); px(21, 34, 8, 8, '#F0DFA0');           // 램프
-      px(44, 44, 14, 16, '#8A6A44'); px(44, 40, 14, 4, '#A88A5E');          // 의자
-      px(70, 30, 22, 30, '#C8A876'); px(70, 30, 22, 3, '#8A6A44');          // 서랍장
-      px(75, 38, 4, 4, '#6E5238'); px(83, 38, 4, 4, '#6E5238');
+      shopWindow(230, 12, 40, 34);
+      // 왼쪽 — 작은 침실 진열
+      px(14, 78, 30, 20, '#C48A6E'); px(14, 74, 30, 6, '#EFE4D0');        // 침대
+      px(14, 74, 6, 10, '#EFE4D0');
+      px(48, 66, 4, 32, '#6E5238'); px(44, 58, 12, 10, '#F0DFA0');        // 스탠드 조명
+      // 가운데 — 서랍장과 액자
+      px(70, 60, 26, 38, '#B4986A'); px(70, 60, 26, 3, '#8A6A44');
+      px(75, 68, 5, 5, '#6E5238'); px(84, 68, 5, 5, '#6E5238');
+      px(75, 80, 5, 5, '#6E5238'); px(84, 80, 5, 5, '#6E5238');
+      px(72, 40, 20, 16, '#6E5236'); px(74, 42, 16, 12, '#D8CDB4');
+      // 오른쪽 — 의자 두 개
+      [108, 130].forEach(x => {
+        px(x, 82, 14, 16, '#8A6A44'); px(x, 78, 14, 4, '#A88A5E');
+      });
     },
   },
   cafe: {
-    title:'찻집', wall:'#F6E6EE', floor:'#D8A8B8', wood:'#8A5A6E',
+    title:'찻집', wall:'#F6E6EE', floor:'#D8A8B8', wood:'#8A5A6E', rug:'#C48AA0',
     staff:{ h:'#5a4030', c:'#B07A9A' }, deskLabel:'차 한 잔 주문하기',
     action: () => say('찻집 주인', ['오늘은 뭘 읽고 계세요?',
       '차 한 잔 드릴게요. 여기 앉아서 읽다 가셔도 돼요.'],
       [{ label:'☕ 한 잔 마시기', fn: () => { Audio8.play('coin'); toast('따뜻한 차를 마셨어요 · 잠깐 쉬었습니다'); } },
        { label:'그냥 지나가기' }]),
     decor(t) {
-      px(24, 40, 24, 20, '#6E4E3A'); px(24, 40, 24, 3, '#8A6A50');          // 원탁
-      px(30, 34, 4, 6, '#EFE4D0'); px(38, 34, 4, 6, '#D8645C');            // 찻잔
-      px(70, 20, 3, 26, '#5A7A52'); px(64, 12, 16, 12, '#6E9A6E');         // 매달린 화분
+      shopWindow(230, 12, 40, 34);
+      px(90, 16, 3, 24, '#5A7A52'); px(84, 8, 16, 12, '#6E9A6E');          // 매달린 화분
+      [[16, 78], [58, 84]].forEach(([x, y]) => {                          // 원탁 두 개 + 의자
+        px(x, y, 24, 20, '#6E4E3A'); px(x, y, 24, 3, '#8A6A50');
+        px(x + 4, y - 6, 4, 6, '#EFE4D0'); px(x + 14, y - 6, 4, 6, '#D8645C');
+        px(x + 27, y + 4, 8, 12, '#5A4030');
+      });
     },
   },
   flower: {
-    title:'꽃집', wall:'#EAF2E2', floor:'#BFCE9E', wood:'#6E9A6E',
+    title:'꽃집', wall:'#EAF2E2', floor:'#BFCE9E', wood:'#6E9A6E', rug:'#8AAE7A',
     staff:{ h:'#3d2b28', c:'#7fa88a' }, deskLabel:'화분 고르기',
     action: () => openFlower(),
     decor(t) {
+      shopWindow(230, 12, 40, 34);
       ['#D4645C', '#E8B45A', '#8A7AAE', '#D48AAE'].forEach((c, i) => {
-        px(18 + i * 22, 44, 16, 12, '#8A6A44'); px(20 + i * 22, 30, 12, 14, c);
+        px(14 + i * 22, 78, 16, 14, '#8A6A44'); px(16 + i * 22, 62, 12, 16, c);
       });
+      px(64, 16, 3, 20, '#5A7A52'); px(58, 8, 16, 12, '#6E9A6E');          // 매달린 화분
+      px(108, 20, 3, 16, '#5A7A52'); px(102, 12, 16, 12, '#7CBC72');
     },
   },
   museum: {
-    title:'박물관', wall:'#F0EDE4', floor:'#C8C4B4', wood:'#8A8A96',
+    title:'박물관', wall:'#F0EDE4', floor:'#C8C4B4', wood:'#8A8A96', rug:'#9A96A8',
     staff:{ h:'#2b2b33', c:'#8A8A96' }, deskLabel:'지금 하는 전시 보기',
     action: () => openExpo(),
     decor(t) {
-      [[18, '#D4645C'], [56, '#4A6EB0'], [94, '#5FB0B8']].forEach(([ox, c]) => {
-        px(ox, 18, 26, 20, '#3A342C'); px(ox + 2, 20, 22, 16, c);
+      [[14, '#D4645C'], [52, '#4A6EB0'], [90, '#5FB0B8']].forEach(([ox, c]) => {
+        px(ox, 10, 26, 22, '#3A342C'); px(ox + 2, 12, 22, 18, c);
       });
+      shopWindow(230, 12, 40, 34);
+      px(50, 80, 20, 22, '#B4B0A2'); px(50, 78, 20, 3, '#8A8676');         // 전시대
+      px(56, 66, 8, 14, '#8A8A96');                                       // 흉상
+      px(58, 62, 4, 5, '#9A96A8');
     },
   },
 };
@@ -634,7 +672,7 @@ function targets() {
     add({ type:'shopdesk' }, SHOP_DESK.x + 35, SHOP_DESK.y - 10, S.deskLabel, 26);
     return out;
   }
-  if (inRide()) {
+  if (inRide() && ride) {
     const R = RIDES[ride.mode];
     addX({ type:'rideout' }, RIDE_W - 23, 22,
          ride.t >= ride.dur ? '내리기' : '아직 달리는 중이에요', 10, 62);
@@ -653,6 +691,7 @@ function targets() {
     add({ type:'ridecrew' }, crewAt.x, crewAt.y, R.crew + '에게 말 걸기', 26);
     return out;
   }
+  if (inRide()) return out;                    // 도착 직후(place는 아직 ride, ride 객체는 이미 비움) — 아무 것도 없다
   if (inUsed()) {
     addX({ type:'out' }, USED_DOOR.x + 17, 22, '헌책방에서 나가기', 8, 66);
     addX({ type:'trace' }, USED_TRACE.x + 59, 62, '흔적 있는 책 서가', 6, 64);
@@ -1818,8 +1857,12 @@ function startRide(mode, gi) {
 function rideLeft() { return Math.max(0, Math.ceil((ride.dur - ride.t) / 1000)); }
 function arriveRide() {
   const gi = ride.to;
-  ride = null; $('ridebar').classList.remove('on');
+  $('ridebar').classList.remove('on');
   transition(() => {
+    // place 와 ride 를 같은 순간에 같이 바꾼다 (재즈바와 같은 이유의 버그를 막는다) —
+    // 따로 놀면 전환 애니메이션 도는 동안 place.kind 는 아직 'ride' 인데 ride 만
+    // 먼저 비어서, 그 사이에 화면을 다시 그리다가 ride.mode 를 읽어 죽는다.
+    ride = null;
     place = { kind:'town', vi: gi }; spawnTown(); scatterDrops(); spawnLive();
     const b = place.kind === 'town' ? BUS : BUS;
     player.x = b.x + b.w / 2 - 5; player.y = b.y + b.h + 14; player.dir = 'down';
