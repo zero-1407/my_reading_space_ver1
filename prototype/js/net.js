@@ -76,6 +76,16 @@ const Net = (() => {
         catch (e) { reason = '저장 실패 — ' + e.message; emit(); }
       }, 1500);
     },
+    // 기다리지 않고 지금 바로 올린다 — 책갈피를 끼우자마자 탭을 닫아도
+    // (keepalive 라서) 페이지가 닫힌 뒤에도 요청이 살아남는다.
+    flush() {
+      if (!online || !me || !this._pending) return;
+      clearTimeout(this._timer); this._timer = null;
+      const r = this._pending; this._pending = null;
+      try { fetch('/api/room', { method:'PUT', keepalive:true,
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ code:me.code, token:me.token, room:r }) }); } catch (e) {}
+    },
     async room(code) { return (await call('/api/room/' + encodeURIComponent(code))).room; },
     async friends() {
       if (!me) return [];

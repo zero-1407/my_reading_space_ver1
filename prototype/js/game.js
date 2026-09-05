@@ -2228,7 +2228,7 @@ $('b-press').onclick = () => {
       return { label: it.emo + ' ' + it.name + ' (' + pocket[k] + '개)', fn: () => {
         pocket[k]--; if (!pocket[k]) delete pocket[k];
         (bk.pressed = bk.pressed || []).push({ kind:k, when: SEASON.label });
-        renderPocket(); Audio8.play('page');
+        renderPocket(); Audio8.play('page'); syncRoom();
         toast(it.emo + ' ' + it.name + '을(를) 눌러 끼웠어요');
         openBook(bk);
       } };
@@ -2252,7 +2252,7 @@ $('mm-send').onclick = () => {
     if (r.ok) {
       blockedTries = 0;
       (activeBook.memos = activeBook.memos || []).push({ who:'나', text:t });
-      Audio8.play('pin');
+      Audio8.play('pin'); syncRoom();
       setTimeout(() => { closeOv(); toast('『' + activeBook.t + '』 사이에 쪽지를 끼워두었어요'); }, 700);
     } else if (++blockedTries >= 3) {
       blockedTries = 0;
@@ -4158,7 +4158,7 @@ Gate.open(() => {
 });
 setInterval(() => { if (Net.online) syncRoom(); }, 30000);   // 놓친 변경 대비
 addEventListener('beforeunload', () => {
-  if (Net.online) Net.push(snapshot());
+  if (Net.online) { Net.push(snapshot()); Net.flush(); }
   if (Net.online && inJazz()) Net.jazzLeave();
 });
 requestAnimationFrame(loop);
