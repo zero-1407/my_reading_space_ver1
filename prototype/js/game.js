@@ -624,11 +624,11 @@ function openMenu() {
   if (!inRide()) {
     items.push({ label:'📚 ' + vill().lib, fn: enterLibrary });
     items.push({ label:'📕 헌책방', fn: enterUsed });
-    items.push({ label:'🏛 박물관 · 지금 하는 전시', fn: openExpo });
+    items.push({ label:'🏛 박물관 · 지금 하는 전시', fn: () => enterShop('museum') });
     items.push({ label:'📰 신문 읽기', fn: openNews });
-    items.push({ label:'✉️ 우체국 · 편지', fn: openPost });
-    items.push({ label:'🪑 가구점', fn: openFurniture });
-    items.push({ label:'🪴 꽃집', fn: openFlower });
+    items.push({ label:'✉️ 우체국 · 편지', fn: () => enterShop('post') });
+    items.push({ label:'🪑 가구점', fn: () => enterShop('furn') });
+    items.push({ label:'🪴 꽃집', fn: () => enterShop('flower') });
     items.push({ label:'🎷 재즈바 한밤 · 사람들이 모이는 곳', fn: enterJazz });
     items.push({ label:'🚪 손님 문 · 다른 사람 방', fn: openVisit });
     items.push({ label:'🚌 다른 마을로 (버스 · 기차)', fn: openMap });
