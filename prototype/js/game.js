@@ -1241,7 +1241,7 @@ const ROLES = [
   { name:'우체부', key:'우체부', x:BLD.post.x + 20, y:BLD.post.y + BLD.post.h + 16, hair:'#2e2a26', shirt:'#c4645c' },
   { name:'책방 주인', key:'헌책방', x:BLD.used.x + 60, y:BLD.used.y + BLD.used.h + 16, hair:'#4a3a2e', shirt:'#8a7a5e' },
   { name:'동네 아이', key:'아이', x:300, y:200, hair:'#3a2e28', shirt:'#e0b45a' },
-  { name:'할머니', key:'할머니', x:120, y:268, hair:'#b0aca8', shirt:'#9aa8a0' },
+  { name:'할머니', key:'할머니', x:120, y:322, hair:'#b0aca8', shirt:'#9aa8a0' },
   { name:'보호소 지기', key:'보호소', x:452, y:330, hair:'#4a3a30', shirt:'#8ab08a', adopt:true },
   { name:'역무원', key:'역무원', x:BLD.train.x + BLD.train.w + 20, y:BLD.train.y + BLD.train.h - 6,
     hair:'#2E2A26', shirt:'#3E5068', station:true, cap:true },
@@ -4325,13 +4325,42 @@ renderPocket(); renderDateTime(); applyAmbience();
 
 // 시작 화면 — 로그인하거나 둘러보기로 들어온 뒤에 마을이 열린다
 Net.onChange(() => { if (openOv === 'visit') renderVisit(); });
-Gate.open(() => {
+Gate.open(async () => {
   Audio8.startMusic();
   $('music').classList.add('on');
   $('music').textContent = '♪ ' + Audio8.tracks[Audio8.trackIdx].name;
   buildTrackList();
   if (Net.online) {
-    if (Net.who) { ROOMS[0].who = Net.who; refreshUI(); }
+    if (Net.who) ROOMS[0].who = Net.who;
+    // 서버에 저장된 내 방을 먼저 받아온다 — 안 그러면 로컬 기본 방(예시 책 4권)을
+    // 그대로 밀어써서, 다른 기기에서 로그인하거나 새로고침할 때마다 실제로
+    // 꾸며둔 책장이 초기 상태로 지워지는 심각한 버그가 된다.
+    if (!Net.isGuest) {
+      try {
+        const s = await Net.room(Net.code);
+        if (s) {
+          Object.assign(ROOMS[0], {
+            who: s.who || ROOMS[0].who, bio: s.bio ?? ROOMS[0].bio,
+            village: s.village || ROOMS[0].village,
+            wall: s.wall || ROOMS[0].wall, floor: s.floor || ROOMS[0].floor,
+            wood: s.wood || ROOMS[0].wood, rug: s.rug || ROOMS[0].rug,
+            hair: s.hair || ROOMS[0].hair, shirt: s.shirt || ROOMS[0].shirt,
+          });
+          if (s.items && s.items.length) ROOMS[0].items = s.items.map(it => Object.assign({ id: uid++ }, it));
+          if (!vidx(ROOMS[0].village)) ROOMS[0].village = VIL[0].key;
+          layoutRoom(ROOMS[0]);
+          // 도감(readKdc)·빌려온 책(borrowed)은 따로 저장되지 않으니, 불러온
+          // 책 상태에서 다시 계산한다 — 안 그러면 새로고침마다 도감이 비어 보인다.
+          readKdc.clear(); borrowed.clear();
+          shelves(ROOMS[0]).forEach(sh => sh.books.forEach(bk => {
+            if (bk.done) readKdc.add(bk.kdc);
+            if (bk.from) borrowed.add(bk.t);
+          }));
+          renderDex(); renderStats();
+        }
+      } catch (e) { /* 아직 저장된 방이 없는 새 계정 — 기본 방 그대로 둔다 */ }
+    }
+    refreshUI();
     syncRoom();
     toast('🚪 ' + (Net.who || '') + ' 님, 내 코드는 ' + Net.code + ' 입니다');
   } else {
