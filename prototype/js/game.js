@@ -160,9 +160,32 @@ const SHOPS = {
     staff:{ h:'#3d2b28', c:'#7fa88a' }, deskLabel:'화분 고르기',
     action: () => openFlower(),
     decor(t) {
-      shopWindow(230, 12, 40, 34);
-      ['#D4645C', '#E8B45A', '#8A7AAE', '#D48AAE'].forEach((c, i) => {
-        px(14 + i * 22, 78, 16, 14, '#8A6A44'); px(16 + i * 22, 62, 12, 16, c);
+      shopWindow(232, 10, 42, 36);
+      // 왼쪽 벽 — 진열용 화분 줄 (잎이 큰 것 · 작은 것 섞어서)
+      ['#D4645C', '#E8B45A', '#8A7AAE', '#D48AAE', '#C4645C'].forEach((c, i) => {
+        const x = 12 + i * 20;
+        px(x, 82, 16, 14, '#8A6A44'); px(x + 1, 82, 14, 3, '#6E5238');
+        px(x + 2, 62, 12, 20, c);
+        px(x + 3, 58, 3, 6, '#5F9A5A'); px(x + 8, 56, 3, 8, '#5F9A5A');   // 잎 두 갈래
+      });
+      // 유리 진열장 — 꽃다발이 가득
+      const gx = 118, gy = 40, gw = 96, gh = 46;
+      px(gx - 2, gy - 2, gw + 4, gh + 4, '#8A6A44');
+      px(gx, gy, gw, gh, '#DCEEF2');
+      [0, 1, 2, 3].forEach(i => px(gx + 2, gy + 2 + i * 11, gw - 4, 1, 'rgba(255,255,255,.5)'));
+      const bunch = ['#D4645C', '#E8B45A', '#D48AAE', '#8A7AAE', '#EFA0B0', '#F0C46A'];
+      for (let i = 0; i < 7; i++) {
+        const bx = gx + 6 + i * 13, by = gy + gh - 8 - (i % 3) * 4;
+        px(bx, by, 3, 10, '#5F9A5A');                                     // 줄기
+        px(bx - 3, by - 8, 9, 8, bunch[i % bunch.length]);                // 꽃 뭉치
+        px(bx - 1, by - 10, 5, 3, shade(bunch[i % bunch.length], 1.25));
+      }
+      px(gx, gy + gh - 2, gw, 2, '#8A6A44');
+      // 화분 나무 두 그루 — 문 옆
+      [[228, 88, 22], [252, 92, 18]].forEach(([x, y, s]) => {
+        px(x, y, s * .5, s * .3, '#8A6A44');
+        px(x + s * .1, y - s * .8, s * .3, s * .8, '#5F9A5A');
+        px(x + s * .16, y - s * .95, s * .18, s * .3, '#7CBC72');
       });
       px(64, 16, 3, 20, '#5A7A52'); px(58, 8, 16, 12, '#6E9A6E');          // 매달린 화분
       px(108, 20, 3, 16, '#5A7A52'); px(102, 12, 16, 12, '#7CBC72');
@@ -3701,21 +3724,31 @@ function building(b, t, on) {
   }
 
   if (S === 'airport') {
-    // 공항 — 관제탑, 활주로 줄무늬, 넓은 유리 터미널
+    // 공항 — 관제탑, 활주로 + 주기된 비행기, 넓은 유리 터미널
     px(b.x, b.y + 8, b.w, b.h - 8, b.wall);
     px(b.x - 6, b.y - 2, b.w + 12, 12, shade(b.roof, .86));         // 완만한 지붕
     px(b.x - 6, b.y - 2, b.w + 12, 3, b.roof);
-    px(b.x + 6, b.y + 20, b.w - 12, 24, '#6E8696');                 // 통유리 터미널
-    for (let i = 0; i < (b.w - 12) / 12; i++)
+    px(b.x + 6, b.y + 20, b.w - 60, 24, '#6E8696');                 // 통유리 터미널 (오른쪽은 비행기 자리로 비워둠)
+    for (let i = 0; i < (b.w - 60) / 12; i++)
       px(b.x + 8 + i * 12, b.y + 22, 9, 20, lit());
     px(b.x + 6, b.y + 46, b.w - 12, 2, shade(b.wall, .8));
-    const tx = b.x + b.w - 26;                                     // 관제탑
-    px(tx, b.y - 46, 20, 50, shade(b.wall, .92));
-    px(tx - 2, b.y - 50, 24, 6, '#4A5866');
-    px(tx + 2, b.y - 46, 16, 10, '#8FC4E0');
-    px(tx + 8, b.y - 62, 3, 14, '#B0B8C0'); px(tx + 7, b.y - 64, 5, 3, '#D4645C');
-    px(b.x - 4, b.y + b.h - 8, b.w + 8, 4, '#7A8088');              // 활주로
-    for (let i = 0; i < (b.w + 8) / 12; i++) px(b.x - 2 + i * 12, b.y + b.h - 7, 6, 2, '#F0EAD8');
+    const tx = b.x + 16;                                            // 관제탑 — 비행기와 안 겹치게 왼쪽에
+    px(tx, b.y - 56, 20, 60, shade(b.wall, .92));
+    px(tx - 3, b.y - 60, 26, 6, '#4A5866');
+    px(tx + 2, b.y - 54, 16, 12, '#8FC4E0');
+    px(tx + 8, b.y - 72, 3, 18, '#B0B8C0'); px(tx + 6, b.y - 75, 7, 4, '#D4645C');
+    px(b.x - 4, b.y + b.h - 10, b.w + 46, 6, '#7A8088');            // 활주로
+    for (let i = 0; i < (b.w + 46) / 12; i++) px(b.x - 2 + i * 12, b.y + b.h - 8, 6, 2, '#F0EAD8');
+    // 주기장 비행기 — 몸통 · 날개 · 꼬리날개가 다 있어야 비행기로 읽힌다
+    const ax = b.x + b.w - 50, ay = b.y + b.h - 30;
+    px(ax - 8, ay + 3, 66, 11, '#EFEFEA');                          // 동체
+    px(ax + 54, ay + 4, 10, 9, '#DCDCD4');                          // 뭉툭한 기수
+    px(ax - 8, ay + 4, 3, 8, '#C8C8C0');                            // 꼬리 쪽 좁아짐
+    px(ax + 40, ay - 15, 5, 16, '#E4E4DC'); px(ax + 40, ay - 16, 13, 4, '#E4E4DC'); // 수직꼬리
+    px(ax + 8, ay + 12, 30, 4, '#C4C4BC');                          // 주날개(그림자처럼 아래로)
+    px(ax - 2, ay + 6, 3, 5, '#5A7AA8');                            // 조종석 창
+    px(ax + 6, ay + 6, 34, 3, '#4A6EB0');                           // 창문 줄
+    if (Math.sin(t / 500) > 0) px(ax + 46, ay + 7, 2, 2, '#E8C46A');// 깜빡이는 항법등
     px(b.x + b.w / 2 - 20, b.y + 4, 40, 9, '#3A4450');              // 간판
     ctx.fillStyle = '#FFE08A';
     for (let i = 0; i < 4; i++) ctx.fillRect(b.x + b.w / 2 - 15 + i * 8, b.y + 7, 5, 4);
