@@ -457,6 +457,10 @@ addEventListener('keydown', e => {
     if (k === ' ' || k === 'enter') { advanceDialog(); e.preventDefault(); return; }
     return;
   }
+  // 로그인 화면 · 이름 입력칸처럼 게임 오버레이 밖에 있는 글자 입력창에서는
+  // e·f·q·m 같은 단축키를 걸지 않는다 — 안 그러면 'e'가 편집모드를 켜버려서 입력이 막힌다.
+  const tag = e.target && e.target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target && e.target.isContentEditable)) return;
   if (k === 'f') { e.preventDefault(); openSearch(); return; }
   if (k === 'e' && isHome()) { e.preventDefault(); setEdit(!edit); return; }
   if (k === 'q') { e.preventDefault(); goOut(); return; }
