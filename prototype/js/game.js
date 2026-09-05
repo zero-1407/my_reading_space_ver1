@@ -905,9 +905,9 @@ const ACTIONS = {
                { label:'그냥 지나가기' }]);
              dialog.at = { x: CAT.x + 5, y: CAT.y }; placeBubble(); },
   post:    () => enterShop('post'),
-  bus:     () => openMap('kr'),
-  train:   () => openMap('kr'),
-  air:     openWorld,
+  bus:     () => openMap(true),                 // 버스 — 가까운 마을만
+  train:   () => openMap(false),                // 기차 — 전국 어디든
+  air:     openWorld,                            // 공항 — 해외만
   landmark:openLandmark,
   mail:    f => openMail(f.to, f.name),
   card:    openCard,
@@ -2217,13 +2217,17 @@ let mapHover = -1;
   mapCv.width = s.w; mapCv.height = s.h;
   mapCv.style.width = s.w + 'px'; mapCv.style.height = s.h + 'px';
 })();
-const krVillages = () => VIL.map((v, i) => ({ v, i })).filter(o => o.v.country === 'kr');
+// 버스는 가까운 마을만, 기차는 전국 다 — 그래서 버스랑 기차가 갈 수 있는 곳이 다르다
+let mapNearOnly = false;
+const BUS_RANGE_KM = 150;
+const krVillages = () => VIL.map((v, i) => ({ v, i })).filter(o => o.v.country === 'kr')
+  .filter(o => !mapNearOnly || o.i === place.vi || kmBetween(place.vi, o.i) <= BUS_RANGE_KM);
 function drawMap() {
   const list = krVillages().map(o => o.v);
   const cur = krVillages().findIndex(o => o.i === place.vi);
   Art.drawKorea(mapG, MAP_CELL, list, cur, mapHover);
 }
-function openMap() { mapHover = -1; drawMap(); renderVillageList(); showOv('map'); }
+function openMap(near) { mapNearOnly = !!near; mapHover = -1; drawMap(); renderVillageList(); showOv('map'); }
 mapCv.addEventListener('mousemove', e => {
   const r = mapCv.getBoundingClientRect();
   const i = Art.regionAt(e.clientX - r.left, e.clientY - r.top, MAP_CELL, krVillages().map(o => o.v));
@@ -2252,8 +2256,8 @@ function renderVillageList() {
 }
 function openWorld() {
   const list = $('wl-list'); list.innerHTML = '';
-  COUNTRIES.forEach(c => {
-    const vs = c.home ? krVillages().map(o => o.v) : (c.villages || []);
+  COUNTRIES.filter(c => !c.home).forEach(c => {           // 공항은 국제선만 — 국내는 버스·기차로
+    const vs = c.villages || [];
     const head = document.createElement('div');
     head.className = 'cty';
     head.innerHTML = '<span class="fl">' + c.flag + '</span><span class="cn">' + c.name + '</span>' +
