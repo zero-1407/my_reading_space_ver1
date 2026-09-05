@@ -102,6 +102,29 @@ function dith(x, y, w, h, c1, c2) {
   for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++)
     if ((xx + yy * 2) % 3 !== 2) px(x + xx, y + yy, 1, 1, (xx + yy) % 2 ? c1 : c2);
 }
+// 진짜 동그란 덩어리 — 사각형만 쌓아서는 절대 귀여워지지 않는다.
+// (x,y) 를 중심으로 반지름 r 인 원을 한 줄씩 채운다 (원형 브러시와 같은 방식)
+function blob(cx, cy, r, c) {
+  const rr = r + .5;
+  for (let dy = -r; dy <= r; dy++) {
+    const hw = Math.floor(Math.sqrt(rr * rr - dy * dy));
+    if (hw >= 0) px(cx - hw, cy + dy, hw * 2 + 1, 1, c);
+  }
+}
+// 꽃송이 — 겹친 덩어리 두세 개 + 중심 악센트로, 네모난 꽃잎 블록 대신 둥글게
+function bloom(cx, cy, r, c) {
+  blob(cx, cy, r, c);
+  blob(cx - Math.round(r * .35), cy - Math.round(r * .35), Math.max(1, r - 1), shade(c, 1.3));
+  blob(cx, cy, 1, shade(c, .55));
+}
+// 살짝 좁아지는 화분 — 사다리꼴이라 사각 블록보다 도자기 같다
+function potShape(x, y, w, h, c) {
+  const taper = w * .16;
+  for (let i = 0; i < h; i++) {
+    const inset = Math.round(i * taper / h);
+    px(x + inset, y + i, Math.max(1, w - inset * 2), 1, i === 0 ? shade(c, 1.3) : i === h - 1 ? shade(c, .7) : c);
+  }
+}
 // 줄무늬 러그 — 매장 바닥에 깔린 텍스타일. 깨끗한 동심원 대신 손짜임 패턴 느낌으로
 function textileRug(x, y, w, h, base, accent) {
   px(x, y, w, h, base);
@@ -177,23 +200,20 @@ const SHOPS = {
         px(x, y, 3, 5, shade('#93A374', .92)); px(x + 1, y - 1, 1, 2, shade('#93A374', 1.1));
       });
       // 왼쪽 벽 — 화분 줄, 높이도 크기도 제각각으로 (줄 맞춘 진열대가 아니라 그냥 놓인 느낌)
-      //  꽃은 은은한 배경 위에서 또렷하게 보여야 하니 잎은 낮춘 색, 꽃 색만 또렷하게 남긴다
+      //  화분은 사다리꼴, 꽃은 둥근 덩어리(bloom) — 사각 블록으로는 절대 꽃이 안 된다
       const pots = [
-        { x:8,  y:92, w:17, h:11, pc:'#A85C46', fc:'#D4645C', lh:20, tilt:-1 },
-        { x:28, y:86, w:13, h:15, pc:'#8A6A44', fc:null,      lh:26, tilt:1 },
-        { x:46, y:96, w:19, h:9,  pc:'#B5764F', fc:'#E0A54C', lh:15, tilt:0 },
-        { x:70, y:90, w:14, h:13, pc:'#7A6248', fc:null,      lh:22, tilt:-1 },
-        { x:90, y:97, w:16, h:8,  pc:'#A85C46', fc:'#C98A7C', lh:14, tilt:1 },
+        { x:8,  y:92, w:17, h:11, pc:'#A85C46', fc:'#D4645C', lh:16, tilt:-1 },
+        { x:28, y:86, w:13, h:15, pc:'#8A6A44', fc:null,      lh:22, tilt:1 },
+        { x:46, y:96, w:19, h:9,  pc:'#B5764F', fc:'#E0A54C', lh:12, tilt:0 },
+        { x:70, y:90, w:14, h:13, pc:'#7A6248', fc:null,      lh:19, tilt:-1 },
+        { x:90, y:97, w:16, h:8,  pc:'#A85C46', fc:'#C98A7C', lh:10, tilt:1 },
       ];
       pots.forEach(p => {
-        px(p.x, p.y, p.w, p.h, p.pc);
-        px(p.x + 1, p.y, p.w - 2, 3, shade(p.pc, 1.2));
-        px(p.x + 1, p.y + p.h - 3, p.w - 2, 2, shade(p.pc, .7));
-        const cx = p.x + p.w / 2 + p.tilt, top = p.y - p.lh;
-        px(cx - 1, top + 4, 2, p.lh - 4, '#5F7A4A');                       // 줄기
-        px(cx - 5, top + 6, 4, 3, '#7C8F5A'); px(cx + 1, top + 10, 5, 3, '#8A9A6E'); // 잎 두 갈래
-        px(cx - 4, top + 12, 3, 3, '#6E8557');
-        if (p.fc) { px(cx - 3, top - 2, 7, 6, p.fc); px(cx - 1, top - 4, 3, 3, shade(p.fc, 1.2)); }
+        potShape(p.x, p.y, p.w, p.h, p.pc);
+        const cx = Math.round(p.x + p.w / 2 + p.tilt), top = p.y - p.lh;
+        px(cx, top + 2, 2, p.lh - 2, '#5F7A4A');                           // 줄기
+        blob(cx - 4, top + 8, 2, '#7C8F5A'); blob(cx + 4, top + 5, 2, '#8A9A6E'); // 둥근 잎 두 덩이
+        if (p.fc) bloom(cx, top, 4, p.fc);                                 // 꽃송이
       });
       // 유리 진열장 — 꽃다발이 가득, 뒤섞인 채로 (일렬로 꽂아둔 게 아니라 한 아름 안긴 느낌)
       const gx = 118, gy = 40, gw = 96, gh = 46;
@@ -202,22 +222,18 @@ const SHOPS = {
       [0, 1, 2, 3].forEach(i => px(gx + 2, gy + 2 + i * 11, gw - 4, 1, 'rgba(255,255,255,.35)'));
       const bunch = ['#D4645C', '#E0A54C', '#C98A7C', '#8A7AAE', '#D48AAE'];
       for (let i = 0; i < 7; i++) {
-        const bx = gx + 6 + i * 13 + (i % 2 ? 3 : -2), by = gy + gh - 8 - (i % 3) * 5;
-        const col = bunch[i % bunch.length];
-        px(bx, by, 3, 10, '#6E8557');                                     // 줄기
-        px(bx - 3, by - 9, 4, 5, col); px(bx + 1, by - 7, 4, 5, shade(col, 1.1));  // 꽃 뭉치 — 이지러진 두 덩이
-        px(bx - 2, by - 11, 3, 3, shade(col, 1.25));
+        const bx = gx + 8 + i * 13 + (i % 2 ? 3 : -2), by = gy + gh - 10 - (i % 3) * 5;
+        px(bx, by, 2, 9, '#6E8557');                                       // 줄기
+        bloom(bx, by - 5, 4, bunch[i % bunch.length]);                     // 둥근 꽃송이
       }
       px(gx, gy + gh - 2, gw, 2, '#7A6248');
-      // 화분 나무 두 그루 — 문 옆, 색을 낮춰서
-      [[228, 88, 22], [252, 92, 18]].forEach(([x, y, s]) => {
-        px(x, y, s * .5, s * .3, '#7A6248');
-        px(x + s * .1, y - s * .8, s * .3, s * .8, '#7C8F5A');
-        dith(x + s * .1, y - s * .8, s * .3, s * .3, shade('#93A374', 1.2), '#8A9A6E');
-        px(x + s * .16, y - s * .95, s * .18, s * .3, '#8A9A6E');
+      // 화분 나무 두 그루 — 문 옆, 둥근 수관으로
+      [[232, 92, 8], [254, 96, 6]].forEach(([x, y, r]) => {
+        potShape(x - r * .8, y, r * 1.6, r, '#7A6248');
+        blob(x, y - r * 1.1, r, '#7C8F5A'); blob(x - r * .5, y - r * 1.7, r * .7, shade('#7C8F5A', 1.35));
       });
-      px(64, 16, 3, 20, '#7A6248'); px(58, 8, 16, 12, '#93A374');          // 매달린 화분
-      px(108, 20, 3, 16, '#7A6248'); px(102, 12, 16, 12, '#8A9A6E');
+      px(65, 4, 2, 15, '#7A6248'); blob(66, 20, 6, '#93A374');             // 매달린 화분
+      px(109, 4, 2, 15, '#7A6248'); blob(110, 24, 6, '#8A9A6E');
       // 화분들 앞 — 물뿌리개와 흩어진 꽃잎 (정돈되지 않은 일상의 흔적), 책상 자리는 피해서
       px(20, 114, 9, 7, '#8A8A78'); px(27, 111, 5, 4, '#8A8A78'); px(31, 113, 3, 1, '#8A8A78');
       [[36,120],[42,116],[47,122]].forEach(([x,y]) => px(x, y, 2, 2, '#C98A7C'));
