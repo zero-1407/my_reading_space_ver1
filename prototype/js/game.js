@@ -679,13 +679,9 @@ addEventListener('keyup', e => {
   keys[e.key.toLowerCase()] = false;
   if (e.key === ' ' && skipHeld) { skipHeld = false; throwStone(); }
 });
-// 마우스로도 — 누르고 있다가 놓으면 던진다
+// 마우스로도 — 누르고 있다가 놓으면 던진다 (손가락 쪽은 꾸미기 모드 손잡기와 한데 묶어 아래에서 처리)
 view.addEventListener('mousedown', () => { if (skip.on && !skip.stone) skipHeld = true; });
 addEventListener('mouseup', () => { if (skipHeld) { skipHeld = false; throwStone(); } });
-view.addEventListener('touchstart', e => {
-  if (skip.on && !skip.stone) { skipHeld = true; e.preventDefault(); }
-}, { passive:false });
-addEventListener('touchend', () => { if (skipHeld) { skipHeld = false; throwStone(); } });
 const held = (...n) => n.some(x => keys[x]);
 
 // ── 대상 목록 ─────────────────────────────────────────────────
@@ -3358,9 +3354,9 @@ const toWorld = e => {
   const r = view.getBoundingClientRect(), ds = dispScale();
   return { x:(e.clientX - r.left) / (SCALE * ds) + camX, y:(e.clientY - r.top) / (SCALE * ds) + camY };
 };
-view.addEventListener('mousedown', e => {
-  if (!edit || openOv) return;
-  const p = toWorld(e), R = ROOMS[0];
+// 마우스로 끌 때 · 손가락으로 끌 때가 같은 자리를 짚게 — 하나로 합쳐서 쓴다
+function editDragStart(p) {
+  const R = ROOMS[0];
   for (const s of shelves(R)) for (const bk of s.books) {
     if (bk.bx === undefined) continue;
     if (p.x >= bk.bx - 1 && p.x <= bk.bx + bk.w + 1 && p.y >= bk.by - 2 && p.y <= bk.by + bk.h + 2) {
@@ -3376,18 +3372,17 @@ view.addEventListener('mousedown', e => {
     }
   }
   sel = null; $('e-del').disabled = true;
-});
-addEventListener('mousemove', e => {
+}
+function editDragMove(p) {
   if (!drag) return;
-  const p = toWorld(e);
   if (drag.what === 'book') { drag.x = p.x; drag.y = p.y; return; }
   const it = drag.it;
   it.x = Math.round(Math.max(2, Math.min(ROOM_W - it.w - 2, p.x - drag.dx)));
   const onFloor = ['rug', 'plant'].includes(it.kind);
   it.y = Math.round(Math.max(onFloor ? RT : 2, Math.min(onFloor ? H - it.h - 4 : RT - it.h - 6, p.y - drag.dy)));
   if (it.kind === 'shelf') layoutShelf(it);
-});
-addEventListener('mouseup', () => {
+}
+function editDragEnd() {
   if (drag && drag.what === 'book') {
     const R = ROOMS[0];
     let tgt = null, best = 1e9;
@@ -3408,6 +3403,25 @@ addEventListener('mouseup', () => {
     }
   }
   drag = null; view.classList.remove('dragging');
+}
+view.addEventListener('mousedown', e => { if (!edit || openOv) return; editDragStart(toWorld(e)); });
+addEventListener('mousemove', e => editDragMove(toWorld(e)));
+addEventListener('mouseup', editDragEnd);
+// 손가락으로도 — 꾸미기 모드에서 물건을 짚고 옮기거나, 짚어서 고른 뒤 치우기 버튼을 누른다
+const toWorldTouch = t => {
+  const r = view.getBoundingClientRect(), ds = dispScale();
+  return { x:(t.clientX - r.left) / (SCALE * ds) + camX, y:(t.clientY - r.top) / (SCALE * ds) + camY };
+};
+view.addEventListener('touchstart', e => {
+  if (edit && !openOv && e.touches.length === 1) { editDragStart(toWorldTouch(e.touches[0])); e.preventDefault(); return; }
+  if (skip.on && !skip.stone) { skipHeld = true; e.preventDefault(); }
+}, { passive:false });
+addEventListener('touchmove', e => {
+  if (drag && e.touches.length === 1) { editDragMove(toWorldTouch(e.touches[0])); e.preventDefault(); }
+}, { passive:false });
+addEventListener('touchend', () => {
+  if (skipHeld) { skipHeld = false; throwStone(); }
+  if (drag) editDragEnd();
 });
 const nearestBoard = (s, y) => (s.boards || boardsOf(s)).reduce((a, b2) => Math.abs(b2 - y) < Math.abs(a - y) ? b2 : a);
 
