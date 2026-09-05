@@ -179,11 +179,11 @@ const BLD = {
   post:  { x:534, y:46,  w:118, h:72,  name:'우체국', shape:'tower', roof:'#C4645C', wall:'#F0E0D4' },
   furn:  { x:566, y:206, w:132, h:88,  name:'가구점', shape:'shed',  roof:'#8A7A4E', wall:'#F0E8D0' },
   cafe:  { x:392, y:214, w:86,  h:62,  name:'찻집',   shape:'gable', roof:'#B07A9A', wall:'#F6E6EE' },
-  flower:{ x:196, y:222, w:74,  h:54,  name:'꽃집',   shape:'flat',  roof:'#6E9A6E', wall:'#EAF2E2' },
-  museum:{ x:712, y:52,  w:140, h:94,  name:'박물관', shape:'dome',  roof:'#8A8A96', wall:'#F0EDE4' },
+  flower:{ x:196, y:222, w:74,  h:54,  name:'꽃집',   shape:'greenhouse', roof:'#8AC4CC', wall:'#EAF2E2' },
+  museum:{ x:712, y:52,  w:140, h:94,  name:'박물관', shape:'dome',  roof:'#A87858', wall:'#EDE0CC' },
   jazz:  { x:388, y:300, w:126, h:80,  name:'재즈바 한밤', shape:'bar', roof:'#4A3E52', wall:'#6B5A72' },
   train: { x:246, y:414, w:186, h:88,  name:'기차역', shape:'flat',  roof:'#6E7A96', wall:'#E4E2EE' },
-  air:   { x:534, y:420, w:184, h:84,  name:'공항',   shape:'flat',  roof:'#4E7A96', wall:'#DCEAF0' },
+  air:   { x:534, y:420, w:184, h:84,  name:'공항',   shape:'airport', roof:'#4E7A96', wall:'#DCEAF0' },
 };
 const BUS  = { x:70, y:428, w:64, h:28 };
 const POND = { x:58, y:242, w:104, h:66 };
@@ -3482,7 +3482,7 @@ function building(b, t, on) {
   }
 
   if (S === 'flat') {
-    // 기차역 · 공항 — 평지붕에 통유리
+    // 기차역 — 평지붕에 통유리
     px(b.x, b.y + 4, b.w, b.h - 4, b.wall);
     px(b.x - 4, b.y - 6, b.w + 8, 11, shade(b.roof, .86));
     px(b.x - 4, b.y - 6, b.w + 8, 3, b.roof);
@@ -3493,6 +3493,48 @@ function building(b, t, on) {
     px(b.x + b.w / 2 - 22, b.y - 2, 44, 9, '#3A4450');             // 간판
     ctx.fillStyle = '#FFE08A';
     for (let i = 0; i < 5; i++) ctx.fillRect(b.x + b.w / 2 - 17 + i * 7, b.y + 1, 4, 4);
+    frontDoor(b, on, t);
+    return;
+  }
+
+  if (S === 'airport') {
+    // 공항 — 관제탑, 활주로 줄무늬, 넓은 유리 터미널
+    px(b.x, b.y + 8, b.w, b.h - 8, b.wall);
+    px(b.x - 6, b.y - 2, b.w + 12, 12, shade(b.roof, .86));         // 완만한 지붕
+    px(b.x - 6, b.y - 2, b.w + 12, 3, b.roof);
+    px(b.x + 6, b.y + 20, b.w - 12, 24, '#6E8696');                 // 통유리 터미널
+    for (let i = 0; i < (b.w - 12) / 12; i++)
+      px(b.x + 8 + i * 12, b.y + 22, 9, 20, lit());
+    px(b.x + 6, b.y + 46, b.w - 12, 2, shade(b.wall, .8));
+    const tx = b.x + b.w - 26;                                     // 관제탑
+    px(tx, b.y - 46, 20, 50, shade(b.wall, .92));
+    px(tx - 2, b.y - 50, 24, 6, '#4A5866');
+    px(tx + 2, b.y - 46, 16, 10, '#8FC4E0');
+    px(tx + 8, b.y - 62, 3, 14, '#B0B8C0'); px(tx + 7, b.y - 64, 5, 3, '#D4645C');
+    px(b.x - 4, b.y + b.h - 8, b.w + 8, 4, '#7A8088');              // 활주로
+    for (let i = 0; i < (b.w + 8) / 12; i++) px(b.x - 2 + i * 12, b.y + b.h - 7, 6, 2, '#F0EAD8');
+    px(b.x + b.w / 2 - 20, b.y + 4, 40, 9, '#3A4450');              // 간판
+    ctx.fillStyle = '#FFE08A';
+    for (let i = 0; i < 4; i++) ctx.fillRect(b.x + b.w / 2 - 15 + i * 8, b.y + 7, 5, 4);
+    frontDoor(b, on, t);
+    return;
+  }
+
+  if (S === 'greenhouse') {
+    // 꽃집 — 유리 온실 지붕과 화단
+    px(b.x + 2, b.y + 14, b.w - 4, b.h - 14, b.wall);
+    for (let i = 0; i < 14; i++) {                                  // 삼각 유리 지붕
+      const w = Math.round(b.w - (i / 14) * b.w * .7);
+      px(b.x + (b.w - w) / 2, b.y - i, w, 1, i % 3 === 0 ? shade(b.roof, 1.3) : '#BFE4EA');
+    }
+    px(b.x - 2, b.y + 12, b.w + 4, 3, b.roof);
+    px(b.x + 6, b.y + 20, b.w - 12, 18, '#DCEEE0');                 // 큰 창
+    px(b.x + 8, b.y + 22, b.w - 16, 14, '#BFE4EA');
+    for (let i = 0; i < (b.w - 16) / 9; i++) {                      // 화단 상자
+      const fx = b.x + 6 + i * 9;
+      px(fx, b.y + b.h - 12, 7, 8, '#8A6A44');
+      px(fx + 1, b.y + b.h - 16, 5, 5, ['#D4645C', '#E8B45A', '#8A7AAE'][i % 3]);
+    }
     frontDoor(b, on, t);
     return;
   }
