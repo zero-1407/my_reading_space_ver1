@@ -137,7 +137,8 @@ const SHOPS = {
     staff:{ h:'#5a4030', c:'#B07A9A' }, deskLabel:'차 한 잔 주문하기',
     action: () => say('찻집 주인', ['오늘은 뭘 읽고 계세요?',
       '차 한 잔 드릴게요. 여기 앉아서 읽다 가셔도 돼요.'],
-      [{ label:'☕ 한 잔 마시기', fn: () => { Audio8.play('coin'); toast('따뜻한 차를 마셨어요 · 잠깐 쉬었습니다'); } },
+      [{ label:'☕ 한 잔 마시기', fn: () => { Audio8.play('coin'); startEating('tea');
+            toast('따뜻한 차를 마셨어요 · 잠깐 쉬었습니다'); } },
        { label:'그냥 지나가기' }]),
     decor(t) {
       shopWindow(230, 12, 40, 34);
@@ -846,8 +847,10 @@ const ACTIONS = {
              [{ label:'👏 조용히 박수', fn: () => { Audio8.play('right'); toast('연주자가 고개를 끄덕였어요'); } },
               { label:'계속 듣는다' }]),
   counter: () => say('바텐더', ['오늘은 뭘로 하시겠어요?', '읽던 책 있으면 여기 두셔도 돼요.'],
-             [{ label:'🥃 한 잔', fn: () => { Audio8.play('coin'); toast('잔을 받았어요 · 얼음이 천천히 녹습니다'); } },
-              { label:'☕ 따뜻한 걸로', fn: () => { Audio8.play('coin'); toast('따뜻한 잔을 받았어요'); } },
+             [{ label:'🥃 한 잔', fn: () => { Audio8.play('coin'); startEating('tea');
+                  toast('잔을 받았어요 · 얼음이 천천히 녹습니다'); } },
+              { label:'☕ 따뜻한 걸로', fn: () => { Audio8.play('coin'); startEating('tea');
+                  toast('따뜻한 잔을 받았어요'); } },
               { label:'괜찮아요' }]),
   rideout: () => ride && ride.t >= ride.dur ? arriveRide()
              : toast('아직 달리는 중이에요 · ' + rideLeft() + '초 남았습니다'),
@@ -877,9 +880,9 @@ const ACTIONS = {
     say(R.crew, ride.served ? ['맛있게 드셨어요?'] : R.lines,
       ride.served ? [{ label:'네, 고마워요' }]
       : [{ label:'☕ 따뜻한 차 한 잔', fn: () => { ride.served = true; Audio8.play('coin');
-            toast('차를 받았어요 · 창밖 보기 좋은 온도네요'); } },
+            startEating('tea'); toast('차를 받았어요 · 창밖 보기 좋은 온도네요'); } },
          { label:'🍪 과자', fn: () => { ride.served = true; Audio8.play('coin');
-            toast('과자를 받았어요'); } },
+            startEating('snack'); toast('과자를 받았어요'); } },
          { label:'괜찮습니다' }]);
   },
   pond:    () => {
@@ -1577,6 +1580,26 @@ function openFlower() {
   dialog.at = { x:SHOP_DESK.x + 35, y:SHOP_DESK.y - 20 }; placeBubble();
 }
 
+// ── 차 · 과자 받았을 때 ──────────────────────────────────────
+//  대사만 뜨고 끝나던 걸, 잠깐이라도 실제로 들고 있는 모습을 보여준다.
+let eating = null;
+function startEating(kind) { eating = { kind, t: 0, dur: 2600 }; }
+function updateEating(dt) {
+  if (!eating) return;
+  eating.t += dt;
+  if (eating.t >= eating.dur) eating = null;
+}
+function drawEating(t) {
+  if (!eating) return;
+  const bob = Math.sin(t / 160) * 1.5;
+  const ox = eating.kind === 'snack' ? -1 : 0;
+  const x = player.x + (player.dir === 'left' ? -7 : 11) + ox, y = player.y - 1 + bob;
+  if (eating.kind === 'snack') {
+    px(x, y, 6, 5, '#D8B888'); px(x + 1, y + 1, 1, 1, '#8A6A44'); px(x + 3, y + 2, 1, 1, '#8A6A44');
+  } else {
+    px(x, y, 6, 6, '#EFE4D0'); px(x + 1, y + 1, 4, 3, '#8A5A3A'); px(x + 6, y + 2, 2, 2, 'rgba(239,228,208,.9)');
+  }
+}
 // ── 피크닉 ────────────────────────────────────────────────────
 //  돗자리를 펴고 앉아 책을 읽는다. 계절에 따라 위에 떨어지는 것이 다르다.
 let picnic = null;
@@ -4536,6 +4559,7 @@ function frame(t) {
   if (!solo) drawLive();
   updatePet(dt); drawPet(t);
   person(player.x, player.y, player.dir, player.moving, player.anim);
+  updateEating(dt); drawEating(t);
   drawFlyFx(dt);
 
   // 날씨 — 실외는 비·눈·구름, 실내는 창으로 들어오는 햇살
