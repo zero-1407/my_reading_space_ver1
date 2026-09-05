@@ -553,7 +553,7 @@ function targets() {
     if (picnic) add({ type:'picnic' }, picnic.x, picnic.y, '돗자리 접기', 22);
     return out;
   }
-  if (inJazz()) {
+  if (inJazz() && jazz) {
     addX({ type:'out' }, JZ.door.x + 17, 22, '재즈바에서 나가기', 8, 66);
     addX({ type:'stage' }, JZ.stage.x + JZ.stage.w / 2, JZ.stage.w / 2, '무대 · 연주 듣기', 10, 66);
     add({ type:'counter' }, JZ.bar.x + 70, JZ.bar.y + 10, '바에서 한 잔', 40);
@@ -563,6 +563,7 @@ function targets() {
       add({ type:'livep', i }, p.x + 5, p.y + 12, p.who + ' 님 (실시간 접속)', 17));
     return out;
   }
+  if (inJazz()) return out;                    // 나가는 중(place는 아직 jazz, jazz 객체는 이미 비움) — 아무 것도 없다
   if (inRide()) {
     const R = RIDES[ride.mode];
     addX({ type:'rideout' }, RIDE_W - 23, 22,
@@ -885,8 +886,12 @@ function goOut() {
   Audio8.play('door');
   const vi = place.vi, from = place.kind === 'room' ? place.idx : null;
   const wasUsed = inUsed(), wasJazz = inJazz();
-  if (wasJazz) { stopJazzLive(); jazz = null; }
+  if (wasJazz) stopJazzLive();
   transition(() => {
+    // place 와 jazz 를 같은 순간에 같이 바꾼다 — 둘이 따로 놀면(전환 애니메이션
+    // 도는 동안 place.kind 는 아직 'jazz' 인데 jazz 만 먼저 비면) 그 사이에
+    // 화면을 다시 그리다가 jazz.patrons 를 읽어 죽는 순간이 생긴다.
+    if (wasJazz) jazz = null;
     place = { kind:'town', vi };
     spawnTown(); scatterDrops(); spawnLive();
     const h = from !== null ? town().houses.find(x => x.to === from) : null;
