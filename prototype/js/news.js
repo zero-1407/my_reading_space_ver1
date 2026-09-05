@@ -6,6 +6,19 @@
 //   책·출판·문학 기사가 위로 올라온다 — 여기는 도서관이니까.
 // ════════════════════════════════════════════════════════════════
 
+// 분야별로 나눠 보기 — RSS 원문엔 분류가 없어서, 제목·요약의 낱말로 짐작한다
+const NEWS_CATS = [
+  { key:'book',  label:'책 · 출판', re:/책|출판|소설|시집|작가|서점|도서관|문학|에세이/ },
+  { key:'show',  label:'전시 · 공연', re:/전시|공연|연극|무용|축제|박물관|미술관|갤러리/ },
+  { key:'film',  label:'영화 · 방송', re:/영화|드라마|방송|다큐|넷플릭스|OTT/ },
+  { key:'music', label:'음악', re:/음악|콘서트|앨범|가수|밴드|오케스트라|공연장/ },
+];
+function newsCatOf(a) {
+  const hay = (a.title || '') + ' ' + (a.summary || '');
+  for (const c of NEWS_CATS) if (c.re.test(hay)) return c.key;
+  return 'etc';
+}
+
 const News = (() => {
   const KEY = 'dotseojae.news.v1';
   const TTL = 1000 * 60 * 30;                 // 30분
@@ -40,12 +53,12 @@ const News = (() => {
     try {
       const j = await (await fetch('/api/news', { cache:'no-store' })).json();
       if (!j.ok || !j.items.length) throw new Error(j.reason || '기사가 없습니다');
-      items = j.items;
+      items = j.items.map(a => Object.assign({ cat: newsCatOf(a) }, a));
       try { localStorage.setItem(KEY, JSON.stringify({ at: Date.now(), items })); } catch (e) {}
       state = 'live'; note = '오늘 문화면 ' + items.length + '건';
     } catch (e) {
       if (c) { items = c.items; state = 'cache'; note = '연결 실패 · 받아둔 기사를 봅니다'; }
-      else { items = FALLBACK; state = 'fallback';
+      else { items = FALLBACK.map(a => Object.assign({ cat: newsCatOf(a) }, a)); state = 'fallback';
              note = '예비 자료 — 실제 기사를 보려면 서버를 켜세요 (node server.js)'; }
     }
     emit(); return items;
@@ -56,6 +69,14 @@ const News = (() => {
     get note() { return note; },
     onChange(f) { subs.push(f); },
     refresh,
-    list() { return items || FALLBACK; },      // 온 순서 그대로 — 최신순
+    list(cat) {                                // 온 순서 그대로 — 최신순. cat 을 주면 그 분야만
+      const all = items || FALLBACK;
+      return cat ? all.filter(a => a.cat === cat) : all;
+    },
+    counts() {                                 // 분야별 개수 — 칩에 몇 건인지 보여주려고
+      const all = items || FALLBACK, out = {};
+      all.forEach(a => { out[a.cat] = (out[a.cat] || 0) + 1; });
+      return out;
+    },
   };
 })();

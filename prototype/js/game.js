@@ -103,12 +103,17 @@ const SHOPS = {
     staff:{ h:'#3a2e28', c:'#C4645C' }, deskLabel:'우편함 확인하기',
     action: () => openPost(),
     decor(t) {
-      for (let r = 0; r < 2; r++) for (let c = 0; c < 6; c++)     // 우편함 칸
-        px(16 + c * 18, 18 + r * 20, 15, 17, (r + c) % 2 ? '#E8C46A' : '#F0DFA0');
+      for (let r = 0; r < 2; r++) for (let c = 0; c < 6; c++) {    // 번호 매겨진 우편함 칸
+        const bx = 16 + c * 18, by = 18 + r * 20;
+        px(bx, by, 15, 17, (r + c) % 2 ? '#E8C46A' : '#F0DFA0');
+        px(bx + 11, by + 8, 2, 2, '#8A6444');                      // 놋쇠 손잡이
+      }
       px(14, 16, 110, 2, '#8A6444');
       shopWindow(230, 12, 40, 34);
       px(20, 96, 16, 14, '#C4A876'); px(40, 100, 14, 10, '#B4986A');       // 바닥에 쌓인 소포
       px(20, 96, 16, 2, '#8A6444'); px(24, 100, 8, 2, '#6E5238');
+      px(58, 98, 3, 4, '#6E5238'); px(56, 90, 7, 8, '#B0A88E');            // 소포 저울
+      px(58, 84, 1, 6, '#6E5238'); px(54, 82, 9, 3, '#8A6444');
     },
   },
   furn: {
@@ -2114,7 +2119,8 @@ function snapshot() {
   };
   return { who:R.who, bio:R.bio, village:R.village,
            wall:R.wall, floor:R.floor, wood:R.wood, rug:R.rug, hair:R.hair, shirt:R.shirt,
-           items:R.items.map(item2), visitors:R.visitors.slice(0, 12) };
+           items:R.items.map(item2), visitors:R.visitors.slice(0, 12),
+           freeNotes: (R.freeNotes || []).slice(-50) };
 }
 let syncT = null;
 function syncRoom() {
@@ -2233,10 +2239,34 @@ $('vs-copy').onclick = async () => {
 
 // ── 신문 ──────────────────────────────────────────────────────
 //  문화면 RSS 를 그대로 건다. 제목·요약까지만 보여주고 본문은 신문사로 보낸다.
+//  분야는 원문에 없어서 제목·요약의 낱말로 짐작해 나눈다 (news.js 의 newsCatOf).
+let newsFilter = null;
 function openNews() { renderNews(); showOv('news'); News.refresh(); }
 News.onChange(() => { if (openOv === 'news') renderNews(); });
 function renderNews() {
-  const list = News.list();
+  const cnt = News.counts();
+  const chips = $('nw-chips'); chips.innerHTML = '';
+  const allBtn = document.createElement('button');
+  allBtn.className = 'chip' + (newsFilter ? '' : ' on'); allBtn.textContent = '전체';
+  allBtn.onclick = () => { newsFilter = null; renderNews(); };
+  chips.appendChild(allBtn);
+  NEWS_CATS.forEach(c => {
+    if (!cnt[c.key]) return;
+    const el = document.createElement('button');
+    el.className = 'chip' + (newsFilter === c.key ? ' on' : '');
+    el.textContent = c.label + ' ' + cnt[c.key];
+    el.onclick = () => { newsFilter = c.key; renderNews(); };
+    chips.appendChild(el);
+  });
+  if (cnt.etc) {
+    const el = document.createElement('button');
+    el.className = 'chip' + (newsFilter === 'etc' ? ' on' : '');
+    el.textContent = '기타 ' + cnt.etc;
+    el.onclick = () => { newsFilter = 'etc'; renderNews(); };
+    chips.appendChild(el);
+  }
+
+  const list = News.list(newsFilter);
   $('nw-cap').innerHTML = SEASON.label + ' · <span class="src ' + News.state + '">' +
     esc(News.note) + '</span>';
   const box = $('nw-list'); box.innerHTML = '';
@@ -2731,23 +2761,47 @@ function openCard() {
 }
 // 내가 여러 책에 남긴 쪽지를 한자리에 모아 보여준다 — 필사 노트처럼
 function openJournal() {
-  const rows = [];
+  $('jn-text').value = ''; $('jn-verdict').className = 'verdict';
+  renderJournal();
+  showOv('journal');
+  setTimeout(() => $('jn-text').focus(), 30);
+}
+function renderJournal() {
+  ROOMS[0].freeNotes = ROOMS[0].freeNotes || [];
+  const rows = ROOMS[0].freeNotes.slice().reverse().map(n => ({ text: n.text, book: null }));
   shelves(ROOMS[0]).forEach(s => s.books.forEach(bk => {
     (bk.memos || []).forEach(m => { if (m.who === '나') rows.push({ book: bk.t, text: m.text }); });
   }));
   const box = $('jn-list'); box.innerHTML = '';
   if (!rows.length) {
-    box.innerHTML = '<div class="none">아직 남긴 문장이 없어요<br>책을 펼치고 「메모 남겨두기」로 문장을 적어보세요</div>';
+    box.innerHTML = '<div class="none">아직 남긴 문장이 없어요 — 위에 바로 적거나, 책을 펼쳐서 남겨보세요</div>';
   } else {
     rows.forEach(r => {
       const el = document.createElement('div');
       el.className = 'memo';
-      el.innerHTML = r.text.replace(/</g, '&lt;') + '<span class="mw">— 『' + r.book + '』</span>';
+      el.innerHTML = r.text.replace(/</g, '&lt;') + (r.book ? '<span class="mw">— 『' + r.book + '』</span>' : '');
       box.appendChild(el);
     });
   }
-  showOv('journal');
 }
+let jnBusy = false;
+$('jn-save').onclick = () => {
+  if (jnBusy) return;
+  const text = $('jn-text').value.trim(), v = $('jn-verdict');
+  if (!text) { toast('적을 문장을 써주세요'); return; }
+  jnBusy = true;
+  checking(v);
+  setTimeout(() => {
+    jnBusy = false;
+    const r = scan(text);
+    verdict(v, r);
+    if (r.ok) {
+      (ROOMS[0].freeNotes = ROOMS[0].freeNotes || []).push({ text, at: Date.now() });
+      $('jn-text').value = ''; syncRoom(); renderJournal();
+      toast('✏️ 적어두었어요');
+    }
+  }, 900);
+};
 function openPoster(it) {
   const hold = $('ps-holder'); hold.innerHTML = '';
   if (it.src) { const img = new Image(); img.className = 'shot'; img.src = it.src; hold.appendChild(img); }
@@ -4637,6 +4691,7 @@ Gate.open(async () => {
           // 친구가 보낸 편지 — snapshot()/syncRoom() 은 letters 를 건드리지 않는다.
           // 같이 왕복시키면, 내가 온라인인 동안 딴 데서 온 편지를 내 예전 상태로 덮어써 지울 수 있어서다.
           if (s.letters && s.letters.length) ROOMS[0].letters = s.letters;
+          ROOMS[0].freeNotes = s.freeNotes || [];
           // 필사대(journal)는 나중에 추가된 기본 가구라, 예전에 저장해둔 방에는 없다 — 없으면 넣어준다
           if (!ROOMS[0].items.some(it => it.kind === 'journal'))
             ROOMS[0].items.push({ id: uid++, kind:'journal', x:326, y:18, w:26, h:32 });
