@@ -53,6 +53,11 @@ const FEEDS = [
   { name:'매일경제', url:'https://www.mk.co.kr/rss/30000023/' },
 ];
 
+// 남의 방에 쪽지를 남길 때 쓰는 최소한의 검열 — 클라이언트를 안 거치고 API 를
+// 직접 찔러도 걸리도록 서버에도 똑같이 둔다 (game.js 의 BLOCK 과 같은 목록).
+const BLOCK = ['시발','씨발','병신','좆','ㅄ','ㅂㅅ','새끼','꺼져','죽어라','걸레',
+               '한남','김치녀','틀딱','급식충','미친놈','미친년','쓰레기같','역겹'];
+
 const MIME = {
   '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8',
   '.css':'text/css; charset=utf-8',   '.json':'application/json; charset=utf-8',
@@ -287,6 +292,29 @@ async function api(req, res, u) {
   if (p === '/api/people' && req.method === 'GET')         // 열려 있는 방들
     return send({ ok:true, people: await store.recent(40), stats: await store.stats() });
 
+  // 남의 책에 흔적 남기기 — 클라이언트를 거치지 않고 API 로 바로 찔러도
+  // 못된 말이 남의 방에 박히면 안 되니, 여기서도 한 번 더 검사한다.
+  if (p === '/api/trace' && req.method === 'POST') {
+    const b = await body(req);
+    if (!await store.auth(b.code, b.token)) { res.statusCode = 403; return send({ ok:false, reason:'권한 없음' }); }
+    if (!b.target || b.target === b.code) { res.statusCode = 400; return send({ ok:false, reason:'대상이 이상해요' }); }
+    const who = await store.whoAmI(b.code);
+    const kind = b.kind === 'pressed' ? 'pressed' : 'memo';
+    let entry;
+    if (kind === 'memo') {
+      const text = String(b.text || '').trim().slice(0, 300);
+      if (!text) { res.statusCode = 400; return send({ ok:false, reason:'내용이 비어 있어요' }); }
+      if (BLOCK.some(w => text.includes(w))) { res.statusCode = 400; return send({ ok:false, reason:'남을 깎아내리는 표현이 들어 있어요' }); }
+      entry = { who: (who && who.who) || '누군가', text };
+    } else {
+      entry = { kind: String(b.itemKind || '').slice(0, 20), when: String(b.when || '').slice(0, 20) };
+    }
+    try {
+      const bk = await store.leaveTrace(b.target, +b.shelfIndex || 0, String(b.bookTitle || ''), kind, entry);
+      return send({ ok:true, book: bk });
+    } catch (e) { res.statusCode = 404; return send({ ok:false, reason: e.message }); }
+  }
+
   // 마을 도서관 ↔ 실제 기관 연결 — 누구나 보고, 로그인한 사람만 바꿀 수 있다
   if (p === '/api/libbind' && req.method === 'GET')
     return send({ ok:true, bindings: await store.libBindings() });
@@ -339,7 +367,7 @@ function pruneJazz() {
 http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://localhost');
 
-  if (/^\/api\/(me|signup|login|rename|room|friend|friends|people|jazz|libbind)(\/|$)/.test(u.pathname)) {
+  if (/^\/api\/(me|signup|login|rename|room|friend|friends|people|jazz|libbind|trace)(\/|$)/.test(u.pathname)) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,OPTIONS');

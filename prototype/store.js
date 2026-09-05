@@ -127,6 +127,32 @@ module.exports = {
     return r ? r.room : null;
   },
 
+  // 남의 책에 흔적(쪽지·책갈피) 남기기 — 방을 통째로 받아 그 책만 고쳐서 다시 쓴다.
+  // 동시에 두 사람이 같은 방에 흔적을 남기면 나중에 쓴 쪽이 이길 수 있다 — 이 규모에선 괜찮다.
+  async leaveTrace(code, shelfIndex, bookTitle, kind, entry) {
+    const row = one(await sb('/su_rooms?code=eq.' + enc(code) + '&select=room'));
+    if (!row || !row.room) throw new Error('그런 방이 없어요');
+    const room = row.room;
+    const shelf = (room.items || []).filter(it => it.kind === 'shelf')[shelfIndex];
+    if (!shelf) throw new Error('그 책장을 찾을 수 없어요');
+    const bk = (shelf.books || []).find(b => b.t === bookTitle);
+    if (!bk) throw new Error('그 책을 찾을 수 없어요 — 이미 자리가 바뀐 것 같아요');
+    if (kind === 'pressed') {
+      bk.pressed = bk.pressed || [];
+      if (bk.pressed.length >= 30) throw new Error('이 책엔 이미 너무 많이 끼워져 있어요');
+      bk.pressed.push(entry);
+    } else {
+      bk.memos = bk.memos || [];
+      if (bk.memos.length >= 30) throw new Error('이 책엔 쪽지가 너무 많이 붙어 있어요');
+      bk.memos.push(entry);
+    }
+    await sb('/su_rooms?on_conflict=code', {
+      method: 'POST', headers: Object.assign({}, H, { Prefer: 'resolution=merge-duplicates' }),
+      body: JSON.stringify({ code, room, updated_at: Date.now() }),
+    });
+    return bk;
+  },
+
   // 친구 — 한쪽이 맺으면 양쪽에 생긴다
   async addFriend(a, b) {
     if (a === b) return false;

@@ -99,6 +99,13 @@ const Net = (() => {
     },
     async people() { return (await call('/api/people')).people; },
 
+    // 남의 책에 진짜로 흔적을 남긴다 — 그 방 주인의 서버 데이터가 직접 바뀐다
+    async leaveTrace(target, shelfIndex, bookTitle, kind, extra) {
+      if (!me) throw new Error('로그인해야 흔적을 남길 수 있어요');
+      return post('/api/trace', Object.assign(
+        { code:me.code, token:me.token, target, shelfIndex, bookTitle, kind }, extra));
+    },
+
     // 마을 도서관 ↔ 실제 기관 연결 — 다 같이 보는 값이라 서버가 갖고 있다
     async libBindings() { return (await call('/api/libbind')).bindings; },
     async setLibBind(key, libName) {

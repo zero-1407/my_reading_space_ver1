@@ -2227,9 +2227,17 @@ $('b-press').onclick = () => {
       const it = Season.ITEMS[k];
       return { label: it.emo + ' ' + it.name + ' (' + pocket[k] + '개)', fn: () => {
         pocket[k]--; if (!pocket[k]) delete pocket[k];
-        (bk.pressed = bk.pressed || []).push({ kind:k, when: SEASON.label });
-        renderPocket(); Audio8.play('page'); syncRoom();
-        toast(it.emo + ' ' + it.name + '을(를) 눌러 끼웠어요');
+        const entry = { kind:k, when: SEASON.label };
+        (bk.pressed = bk.pressed || []).push(entry);
+        renderPocket(); Audio8.play('page');
+        if (isHome()) syncRoom();
+        else if (Net.online && room().remote) {
+          const si = shelves(room()).indexOf(shelfOf(room(), bk));
+          Net.leaveTrace(room().code, si, bk.t, 'pressed', entry)
+            .catch(err => toast('저장 못 했어요 — ' + err.message));
+        }
+        toast(it.emo + ' ' + it.name + '을(를) 눌러 끼웠어요 — ' +
+          (isHome() ? '내 책이에요' : room().who + '의 책에 남았어요'));
         openBook(bk);
       } };
     }).concat([{ label:'그만두기' }]));
@@ -2252,7 +2260,13 @@ $('mm-send').onclick = () => {
     if (r.ok) {
       blockedTries = 0;
       (activeBook.memos = activeBook.memos || []).push({ who:'나', text:t });
-      Audio8.play('pin'); syncRoom();
+      Audio8.play('pin');
+      if (isHome()) syncRoom();
+      else if (Net.online && room().remote) {
+        const si = shelves(room()).indexOf(shelfOf(room(), activeBook));
+        Net.leaveTrace(room().code, si, activeBook.t, 'memo', { text:t })
+          .catch(err => toast('저장 못 했어요 — ' + err.message));
+      }
       setTimeout(() => { closeOv(); toast('『' + activeBook.t + '』 사이에 쪽지를 끼워두었어요'); }, 700);
     } else if (++blockedTries >= 3) {
       blockedTries = 0;
