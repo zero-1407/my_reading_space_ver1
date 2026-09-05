@@ -731,6 +731,7 @@ function targets() {
     if (it.kind === 'poster') wall({ type:'poster', it }, it, '포스터 크게 보기');
     if (it.kind === 'frame')  wall({ type:'poster', it }, it, '액자 크게 보기');
     if (it.kind === 'card')   wall({ type:'card' }, it, '대출카드 보기');
+    if (it.kind === 'journal') wall({ type:'journal' }, it, '내가 남긴 문장 보기');
     if (it.kind === 'window') wall({ type:'window' }, it, '창밖 보기');
     if (it.kind === 'plant')  wall({ type:'plant', it }, it, '화분 살펴보기', 10);
     if (it.kind === 'perch' && R.letters.length)
@@ -911,6 +912,7 @@ const ACTIONS = {
   landmark:openLandmark,
   mail:    f => openMail(f.to, f.name),
   card:    openCard,
+  journal: openJournal,
   perch:   openLetter,
   desk:    openSearch,
   rank:    openRank,
@@ -2613,6 +2615,25 @@ function openCard() {
   });
   showOv('card');
 }
+// 내가 여러 책에 남긴 쪽지를 한자리에 모아 보여준다 — 필사 노트처럼
+function openJournal() {
+  const rows = [];
+  shelves(ROOMS[0]).forEach(s => s.books.forEach(bk => {
+    (bk.memos || []).forEach(m => { if (m.who === '나') rows.push({ book: bk.t, text: m.text }); });
+  }));
+  const box = $('jn-list'); box.innerHTML = '';
+  if (!rows.length) {
+    box.innerHTML = '<div class="none">아직 남긴 문장이 없어요<br>책을 펼치고 「메모 남겨두기」로 문장을 적어보세요</div>';
+  } else {
+    rows.forEach(r => {
+      const el = document.createElement('div');
+      el.className = 'memo';
+      el.innerHTML = r.text.replace(/</g, '&lt;') + '<span class="mw">— 『' + r.book + '』</span>';
+      box.appendChild(el);
+    });
+  }
+  showOv('journal');
+}
 function openPoster(it) {
   const hold = $('ps-holder'); hold.innerHTML = '';
   if (it.src) { const img = new Image(); img.className = 'shot'; img.src = it.src; hold.appendChild(img); }
@@ -3855,6 +3876,20 @@ function drawItem(R, it, t) {
                 arrow(it.x + it.w / 2 - 1, it.y - 8, t); }
       break;
     }
+    case 'journal': {                                     // 내가 남긴 문장을 모아보는 필사대
+      const on = isF('journal');
+      px(it.x - 1, it.y - 1, it.w + 2, it.h + 2, woodDark);
+      px(it.x, it.y, it.w, it.h, '#D8CDB4');
+      ['#D4645C', '#E8B45A', '#7CA8D4'].forEach((c, i) => {
+        const ny = it.y + 4 + i * 8;
+        px(it.x + 3, ny, it.w - 6, 6, '#FBF3E2');
+        px(it.x + 3, ny, 3, 3, c);
+        px(it.x + 5, ny + 2, it.w - 10, 1, '#C4B394');
+      });
+      if (on) { ctx.fillStyle = GLOW; ctx.fillRect(it.x - 3, it.y - 3, it.w + 6, it.h + 6);
+                arrow(it.x + it.w / 2 - 1, it.y - 8, t); }
+      break;
+    }
     case 'perch': {
       const on = isF('perch');
       px(it.x, it.y, it.w, 2, woodDark); px(it.x + it.w - 2, it.y - 8, 2, 8, woodDark);
@@ -4393,6 +4428,9 @@ Gate.open(async () => {
             hair: s.hair || ROOMS[0].hair, shirt: s.shirt || ROOMS[0].shirt,
           });
           if (s.items && s.items.length) ROOMS[0].items = s.items.map(it => Object.assign({ id: uid++ }, it));
+          // 필사대(journal)는 나중에 추가된 기본 가구라, 예전에 저장해둔 방에는 없다 — 없으면 넣어준다
+          if (!ROOMS[0].items.some(it => it.kind === 'journal'))
+            ROOMS[0].items.push({ id: uid++, kind:'journal', x:326, y:18, w:26, h:32 });
           if (!vidx(ROOMS[0].village)) ROOMS[0].village = VIL[0].key;
           layoutRoom(ROOMS[0]);
           // 도감(readKdc)·빌려온 책(borrowed)은 따로 저장되지 않으니, 불러온

@@ -231,6 +231,7 @@ const ROOMS = [
       item({ kind:'lamp',  x:216, y:52, w:10, h:20 }),
       item({ kind:'rug',   x:112, y:98, w:68, h:30 }),
       item({ kind:'plant', x:230, y:108, w:10, h:16 }),
+      item({ kind:'journal', x:326, y:18, w:26, h:32 }),
     ] }),
 ];
 
