@@ -165,4 +165,20 @@ module.exports = {
     const [users, rooms] = await Promise.all([count('su_users'), count('su_rooms')]);
     return { users, rooms };
   },
+
+  // 마을 도서관 ↔ 실제 기관 연결 — 다 같이 보는 값이라 브라우저가 아니라 여기 저장한다.
+  // 누가 연결해도 같은 이름을 고른 다른 마을엔 똑같은 실제 장서가 보인다.
+  async libBindings() {
+    const rows = (await sb('/su_libbind?select=key,lib_name')) || [];
+    const out = {};
+    rows.forEach(r => { out[r.key] = r.lib_name; });
+    return out;
+  },
+  async setLibBind(key, libName) {
+    if (!libName) { await sb('/su_libbind?key=eq.' + enc(key), { method: 'DELETE' }); return; }
+    await sb('/su_libbind?on_conflict=key', {
+      method: 'POST', headers: Object.assign({}, H, { Prefer: 'resolution=merge-duplicates' }),
+      body: JSON.stringify({ key, lib_name: libName, at: Date.now() }),
+    });
+  },
 };

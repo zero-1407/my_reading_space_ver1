@@ -11,7 +11,7 @@
 const VER = 'dot-seojae-v3';
 const SHELL = [
   './', './room.html', './manifest.webmanifest',
-  './js/audio.js', './js/art.js', './js/season.js', './js/expo.js', './js/news.js',
+  './js/audio.js', './js/art.js', './js/season.js', './js/expo.js', './js/books.js', './js/news.js',
   './js/net.js', './js/gate.js', './js/weather.js', './js/data.js', './js/game.js',
   './icons/icon-192.png', './icons/icon-512.png',
 ];

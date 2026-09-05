@@ -2486,6 +2486,59 @@ function openSearch() {
     ch.appendChild(el);
   }
   runSearch(); setTimeout(() => qEl.focus(), 30);
+  renderRealBooks(); Books.refresh();
+}
+Books.onChange(() => { if (openOv === 'search') renderRealBooks(); });
+// 마을 도서관 이름은 지어낸 것이라 실제 기관과 우연히 같을 일이 거의 없다.
+// 그래서 "이 마을을 실제 어느 도서관과 연결할지"를 서버에 다 같이 보이게 저장해둔다 —
+// 한 번 연결하면, 같은 이름을 고른 다른 마을도 정확히 같은 실제 장서를 보게 된다.
+let libBindings = {};
+async function loadLibBindings() {
+  if (!Net.canConnect) return;
+  try { libBindings = await Net.libBindings() || {}; if (openOv === 'search') renderRealBooks(); }
+  catch (e) {}
+}
+loadLibBindings();
+
+function renderRealBooks() {
+  const cap = $('real-cap'), box = $('results-real'), v = vill();
+  const bound = libBindings[v.key] || '';
+  const hits = bound ? Books.forLibrary(bound) : [];
+  box.innerHTML = '';
+  if (bound) {
+    cap.innerHTML = '“' + esc(bound) + '”과 연결됨 · ' +
+      '<span class="src ' + Books.state + '">' + esc(Books.note) + '</span>' +
+      (Net.online ? ' · <a href="#" id="real-unlink">연결 풀기</a>' : '');
+    const un = document.getElementById('real-unlink');
+    if (un) un.onclick = async e => {
+      e.preventDefault();
+      try { libBindings = await Net.setLibBind(v.key, ''); renderRealBooks(); } catch (err) { toast(err.message); }
+    };
+    if (!hits.length) { box.innerHTML = '<div class="none">이 이름의 실제 장서 기록이 아직 없어요</div>'; return; }
+    hits.slice(0, 30).forEach(x => {
+      const el = document.createElement('div');
+      el.className = 'res';
+      el.innerHTML = '<span><span class="t">' + esc(x.title) + '</span>' +
+        '<span class="a">' + esc(x.author || '') + (x.pub ? ' · ' + esc(x.pub) : '') + '</span></span>' +
+        (x.url ? '<a class="k" href="' + esc(x.url) + '" target="_blank" rel="noopener">보기</a>' : '');
+      box.appendChild(el);
+    });
+    return;
+  }
+  const hint = Books.institutions(6);
+  cap.innerHTML = '아직 실제 도서관과 연결 안 함 · ' + '<span class="src ' + Books.state + '">' + esc(Books.note) + '</span>';
+  if (!Net.online) { box.innerHTML = '<div class="none">로그인하면 실제 도서관과 연결할 수 있어요</div>'; return; }
+  if (!hint.length) { box.innerHTML = '<div class="none">받아온 실제 장서가 없어요</div>'; return; }
+  box.innerHTML = '<div class="none">아래 실제 기관 중 하나를 골라 이 마을과 연결해보세요 — 같은 이름을 고른 다른 마을도 똑같은 장서를 보게 됩니다.</div>';
+  hint.forEach(name => {
+    const el = document.createElement('div');
+    el.className = 'res';
+    el.innerHTML = '<span class="t">' + esc(name) + '</span><span class="k">연결하기</span>';
+    el.onclick = async () => {
+      try { libBindings = await Net.setLibBind(v.key, name); renderRealBooks(); } catch (err) { toast(err.message); }
+    };
+    box.appendChild(el);
+  });
 }
 qEl.addEventListener('input', runSearch);
 function runSearch() {

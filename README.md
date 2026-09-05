@@ -82,9 +82,15 @@ Render 무료 플랜은 디스크가 임시라서(서버가 잠들었다 깨면 
      friend text references su_users(code) on delete cascade,
      primary key (code, friend)
    );
+   create table su_libbind (
+     key text primary key,
+     lib_name text,
+     at bigint
+   );
    alter table su_users enable row level security;
    alter table su_rooms enable row level security;
    alter table su_friends enable row level security;
+   alter table su_libbind enable row level security;
    -- 정책을 하나도 안 만들어도 됩니다 — 서버는 RLS를 건너뛰는 service_role 키로 접속합니다.
    ```
 

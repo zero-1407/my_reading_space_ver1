@@ -89,6 +89,13 @@ const Net = (() => {
     },
     async people() { return (await call('/api/people')).people; },
 
+    // 마을 도서관 ↔ 실제 기관 연결 — 다 같이 보는 값이라 서버가 갖고 있다
+    async libBindings() { return (await call('/api/libbind')).bindings; },
+    async setLibBind(key, libName) {
+      if (!me) throw new Error('로그인해야 연결할 수 있어요');
+      return (await post('/api/libbind', { code:me.code, token:me.token, key, libName })).bindings;
+    },
+
     // 재즈바 실시간 동시접속 — 정원이 차면 서버가 거절한다 (reason 에 담겨 온다)
     async jazzPing(x, y) {
       if (!me) return { people:[], cap:10 };
