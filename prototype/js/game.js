@@ -542,6 +542,8 @@ function targets() {
     add({ type:'counter' }, JZ.bar.x + 70, JZ.bar.y + 10, '바에서 한 잔', 40);
     jazz.patrons.forEach((p, i) =>
       add({ type:'patron', i }, p.x + 5, p.y + 12, p.name + '에게 말 걸기', 17));
+    (jazz.live || []).forEach((p, i) =>
+      add({ type:'livep', i }, p.x + 5, p.y + 12, p.who + ' 님 (실시간 접속)', 17));
     return out;
   }
   if (inRide()) {
@@ -683,6 +685,7 @@ const ACTIONS = {
   visit:   openVisit,
   jazz:    enterJazz,
   patron:  f => talkPatron(f.i),
+  livep:   f => talkLive(f.i),
   stage:   () => say('무대', ['넷이 소리를 맞추고 있어요.',
              '피아노가 먼저 물러서고, 색소폰이 한참 혼자 갑니다.',
              '아무도 박수를 치지 않지만 다들 듣고 있어요.'],
@@ -731,8 +734,7 @@ const ACTIONS = {
         [{ label:'🏊 더 놀다 가기', fn: () => toast('물놀이를 실컷 했어요') }, { label:'나가기' }]);
     } else if (SEASON.key === 'winter') {
       say('언 호수', ['호수가 꽝꽝 얼었어요.', '마을 사람 몇이 벌써 지치고 있습니다.'],
-        [{ label:'⛸ 스케이트 타기', fn: () => { Audio8.play('right');
-            toast('한 바퀴 크게 돌았어요 · 넘어지지 않았습니다'); } }, { label:'구경만 하기' }]);
+        [{ label:'⛸ 스케이트 타기', fn: startSkate }, { label:'구경만 하기' }]);
     } else if (SEASON.key === 'spring') {
       say('호숫가', ['물가에 개구리 소리가 나요.', '벚꽃 아래가 비어 있습니다. 돗자리 펴기 좋은 날이에요.'],
         [{ label:'🧺 피크닉 펴기', fn: startPicnic },
@@ -866,7 +868,7 @@ function goOut() {
   Audio8.play('door');
   const vi = place.vi, from = place.kind === 'room' ? place.idx : null;
   const wasUsed = inUsed(), wasJazz = inJazz();
-  if (wasJazz) jazz = null;
+  if (wasJazz) { stopJazzLive(); jazz = null; }
   transition(() => {
     place = { kind:'town', vi };
     spawnTown(); scatterDrops(); spawnLive();
@@ -1413,6 +1415,13 @@ function drawPicnic(t) {
 // ── 물수제비 ──────────────────────────────────────────────────
 //  누르고 있으면 힘이 차고, 놓으면 던진다. 오래 누를수록 멀리.
 const skip = { on:false, power:0, up:true, stone:null, best:0 };
+let skate = null;                                     // 얼음 호수 위를 도는 동안 — 캐릭터가 실제로 원을 그리며 미끄러진다
+function startSkate() {
+  const cx = POND.x + POND.w / 2, cy = POND.y + POND.h / 2;
+  const r0 = Math.hypot(player.x + 5 - cx, player.y + 13 - cy);
+  skate = { cx, cy, r: Math.max(16, Math.min(28, r0 || 20)),
+            a: Math.atan2(player.y + 13 - cy, player.x + 5 - cx), t: 0, dur: 3400 };
+}
 function startSkip() {
   skip.on = true; skip.power = 0; skip.up = true; skip.stone = null; skipHeld = false;
   $('skipbar').classList.add('on');
@@ -1500,6 +1509,22 @@ const JZ = {
   tables: [[62, 100], [122, 112], [186, 98], [246, 116], [96, 128], [206, 132], [318, 126], [378, 122]],
 };
 let jazz = null;
+let jazzTimer = null;
+const JAZZ_CAP_FALLBACK = 10;                          // 서버가 처음 응답하기 전 표시용
+function pingJazz() {
+  if (!jazz || !Net.online) return;
+  Net.jazzPing(Math.round(player.x), Math.round(player.y)).then(r => {
+    if (!jazz) return;
+    if (!r.ok) { toast(r.reason || '재즈바 접속에 문제가 있어요'); return; }
+    jazz.cap = r.cap;
+    jazz.live = r.people || [];
+    refreshUI();
+  }).catch(() => {});
+}
+function stopJazzLive() {
+  if (jazzTimer) { clearInterval(jazzTimer); jazzTimer = null; }
+  Net.jazzLeave();
+}
 function enterJazz() {
   Audio8.play('door');
   transition(() => {
@@ -1508,8 +1533,9 @@ function enterJazz() {
     const names = shuffle(PATRON_NAMES).slice(0, n);
     place = { kind:'jazz', vi };
     jazz = {
-      crowd: 24 + Math.floor(Math.random() * 52),          // 지금 이 방에 있는 사람 수
+      crowd: 24 + Math.floor(Math.random() * 52),          // 지금 이 방에 있는 사람 수 (오프라인용 예시)
       seated: null,
+      live: [], cap: JAZZ_CAP_FALLBACK,                    // 실제 접속 중인 회원 — 서버가 채운다
       patrons: names.map((name, i) => {
         const T = JZ.tables[i % JZ.tables.length];
         return { name, x: T[0] + (i < JZ.tables.length ? -14 : 16), y: T[1] - 4,
@@ -1519,10 +1545,15 @@ function enterJazz() {
                  t: Math.random() * 3000 };
       }),
     };
+    if (Net.online) {
+      pingJazz();
+      jazzTimer = setInterval(pingJazz, 3000);
+    }
     live = []; setView(false);
     player.x = JZ.door.x + 6; player.y = 108; player.dir = 'down';
     camX = camY = 0; refreshUI();
-    toast('🎷 지금 ' + jazz.crowd + ' / ' + BAR_CAP + '명이 와 있어요');
+    toast(Net.online ? '🎷 실시간 접속 정원 ' + JAZZ_CAP_FALLBACK + '명 중 한 자리 — 실제 회원은 이름표로 보여요'
+                      : '🎷 지금 ' + jazz.crowd + ' / ' + BAR_CAP + '명이 와 있어요 (혼자 모드 예시)');
   });
 }
 function jazzSeatOf(i) { const T = JZ.tables[i]; return { x: T[0] + 6, y: T[1] - 2 }; }
@@ -1610,8 +1641,24 @@ function drawJazz(t) {
     person(p.x, p.y - bob, 'down', false, 0, { h:p.hair, c:p.shirt });
     if (on) arrow(p.x + 4, p.y - 12, t);
   });
+  // 실시간으로 접속해 있는 진짜 회원 — 이름표(🟢)가 항상 보이고, 초록 점으로 한 번 더 표시한다
+  (jazz.live || []).forEach((p, i) => {
+    const on = isF('livep', 'i', i);
+    if (on) { ctx.fillStyle = GLOW; ctx.fillRect(p.x - 4, p.y - 6, 18, 24); }
+    person(p.x, p.y, 'down', false, Math.floor(t / 160), { h:'#4A3A2E', c:'#5A9E7A' });
+    px(p.x + 11, p.y - 2, 3, 3, '#3FBF6A');
+    if (on) arrow(p.x + 4, p.y - 12, t);
+  });
 
   drawDoorIndoor('#7A5A44', JZ.door, isF('out'), t);
+}
+// 실제 접속 중인 회원 — 지어낸 대사를 붙이지 않는다. 아직 채팅 기능이 없다는 것만 정직하게 알려준다.
+function talkLive(i) {
+  const p = jazz.live && jazz.live[i];
+  if (!p) return;
+  say(p.who + ' 님', ['🟢 지금 실시간으로 이 바에 와 있는 회원이에요.', '아직 대화 기능은 없어요 — 서로 있다는 것만 보여요.'],
+    [{ label:'손 흔들기', fn: () => Audio8.play('select') }]);
+  dialog.at = { x: p.x + 5, y: p.y }; placeBubble();
 }
 function talkPatron(i) {
   const p = jazz.patrons[i];
@@ -2880,7 +2927,9 @@ function refreshUI() {
           : inJazz() ? '재즈바 한밤'
           : inTown() ? v.name : inLib() ? v.lib : inUsed() ? '헌책방'
           : isHome() ? '내 방' : room().who + '의 방';
-  const s = inJazz() ? '지금 ' + jazz.crowd + ' / ' + BAR_CAP + '명 · 여기서만 낯선 사람이 보입니다'
+  const s = inJazz() ? (Net.online
+            ? '실시간 ' + ((jazz.live ? jazz.live.length : 0) + 1) + ' / ' + (jazz.cap || JAZZ_CAP_FALLBACK) + '명 · 🟢 이름표가 진짜 회원이에요'
+            : '지금 ' + jazz.crowd + ' / ' + BAR_CAP + '명 · 혼자 모드 예시 손님입니다')
           : inRide() ? VIL[ride.to].name + ' 로 가는 중'
           : inTown() ? v.where + ' · ' + v.theme + ' · 회원 ' + v.members + '명'
           : inLib()  ? '장서 ' + v.books + ' · 서가 열 칸'
@@ -2951,6 +3000,9 @@ function buildLabels() {
     LABELS.push({ t:'계산대', x: USED_DESK.x + 34, y: USED_DESK.y - 26 });
     STALLS.forEach(s => LABELS.push({ t: s.name, x: s.x + s.w / 2, y: s.y - 34 }));
     LABELS.push({ t:'교환대', x: USED_SWAP.x + 26, y: USED_SWAP.y - 30 });
+  } else if (inJazz()) {
+    // 실시간으로 와 있는 진짜 회원만 이름표를 띄운다 — 나머지 손님은 배경 손님이다
+    (jazz.live || []).forEach(p => LABELS.push({ t: '🟢 ' + p.who, x: p.x + 5, y: p.y - 16, c:'mine' }));
   }
   const box = $('labels');
   box.innerHTML = LABELS.map((l, i) =>
@@ -3876,34 +3928,49 @@ function frame(t) {
   // 걷기 — 키보드와 클릭 목표를 같은 길로 처리한다
   let dx = 0, dy = 0;
   const frozen = openOv || drag || dialog;
-  if (!frozen) {
-    if (held('arrowleft', 'a'))  { dx--; walkTo = null; }
-    if (held('arrowright', 'd')) { dx++; walkTo = null; }
-    if (held('arrowup', 'w'))    { dy--; walkTo = null; }
-    if (held('arrowdown', 's'))  { dy++; walkTo = null; }
-    if (!dx && !dy && walkTo) {
-      const gx = walkTo.x - (player.x + 5), gy = walkTo.y - (player.y + 13);
-      const arrived = walkTo.then && walkTo.then.m === 'x'
-        ? Math.abs(gx) < 4 : Math.hypot(gx, gy) < 6;
-      if (arrived) {
-        const th = walkTo.then; walkTo = null;
-        if (th) act(th);
-      } else { dx = gx; dy = gy; }
-      // 벽에 막혀 더 못 가면 포기한다
-      if (walkTo && ++walkTo.stuck > 900) walkTo = null;
+  if (skate) {
+    // 얼음 위를 도는 동안은 입력을 안 받고, 원을 그리며 미끄러진다
+    skate.t += dt; skate.a += dt / 260;
+    player.x = skate.cx + Math.cos(skate.a) * skate.r - 5;
+    player.y = skate.cy + Math.sin(skate.a) * skate.r * .55 - 13;
+    const vx = -Math.sin(skate.a), vy = Math.cos(skate.a) * .55;
+    player.dir = Math.abs(vx) > Math.abs(vy) ? (vx < 0 ? 'left' : 'right') : (vy < 0 ? 'up' : 'down');
+    player.moving = true; player.anim++;
+    if (skate.t >= skate.dur) {
+      skate = null;
+      Audio8.play('right');
+      toast('⛸ 한 바퀴 크게 돌았어요 · 넘어지지 않았습니다');
     }
+  } else {
+    if (!frozen) {
+      if (held('arrowleft', 'a'))  { dx--; walkTo = null; }
+      if (held('arrowright', 'd')) { dx++; walkTo = null; }
+      if (held('arrowup', 'w'))    { dy--; walkTo = null; }
+      if (held('arrowdown', 's'))  { dy++; walkTo = null; }
+      if (!dx && !dy && walkTo) {
+        const gx = walkTo.x - (player.x + 5), gy = walkTo.y - (player.y + 13);
+        const arrived = walkTo.then && walkTo.then.m === 'x'
+          ? Math.abs(gx) < 4 : Math.hypot(gx, gy) < 6;
+        if (arrived) {
+          const th = walkTo.then; walkTo = null;
+          if (th) act(th);
+        } else { dx = gx; dy = gy; }
+        // 벽에 막혀 더 못 가면 포기한다
+        if (walkTo && ++walkTo.stuck > 900) walkTo = null;
+      }
+    }
+    player.moving = !!(dx || dy);
+    if (player.moving) {
+      const L = Math.hypot(dx, dy), sp = inTown() ? 1.05 : .85;
+      const ux = dx / L, uy = dy / L;
+      player.dir = Math.abs(ux) > Math.abs(uy) ? (ux < 0 ? 'left' : 'right') : (uy < 0 ? 'up' : 'down');
+      const nx = player.x + ux * sp, ny = player.y + uy * sp;
+      if (!blocked(nx + 5, player.y + 13)) player.x = nx;
+      if (!blocked(player.x + 5, ny + 13)) player.y = ny;
+      player.anim++;
+      Audio8.footstep(inTown());
+    } else player.anim = 0;
   }
-  player.moving = !!(dx || dy);
-  if (player.moving) {
-    const L = Math.hypot(dx, dy), sp = inTown() ? 1.05 : .85;
-    const ux = dx / L, uy = dy / L;
-    player.dir = Math.abs(ux) > Math.abs(uy) ? (ux < 0 ? 'left' : 'right') : (uy < 0 ? 'up' : 'down');
-    const nx = player.x + ux * sp, ny = player.y + uy * sp;
-    if (!blocked(nx + 5, player.y + 13)) player.x = nx;
-    if (!blocked(player.x + 5, ny + 13)) player.y = ny;
-    player.anim++;
-    Audio8.footstep(inTown());
-  } else player.anim = 0;
 
   player.x = Math.max(PAD, Math.min(wd.w - 10 - PAD, player.x));
   player.y = inTown() ? Math.max(8, Math.min(TOWN.h - 16, player.y))
@@ -4021,5 +4088,8 @@ Gate.open(() => {
   }
 });
 setInterval(() => { if (Net.online) syncRoom(); }, 30000);   // 놓친 변경 대비
-addEventListener('beforeunload', () => { if (Net.online) Net.push(snapshot()); });
+addEventListener('beforeunload', () => {
+  if (Net.online) Net.push(snapshot());
+  if (Net.online && inJazz()) Net.jazzLeave();
+});
 requestAnimationFrame(loop);

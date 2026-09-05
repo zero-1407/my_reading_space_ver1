@@ -287,14 +287,49 @@ async function api(req, res, u) {
   if (p === '/api/people' && req.method === 'GET')         // 열려 있는 방들
     return send({ ok:true, people: await store.recent(40), stats: await store.stats() });
 
+  // ── 재즈바 「한밤」 실시간 동시접속 ──────────────────────────
+  //  파일이나 DB가 아니라 메모리에 잠깐 둔다 — 접속 중인 사람 위치일 뿐,
+  //  서버가 재시작되면 다 같이 나가는 게 자연스럽다. 정원은 JAZZ_CAP 명.
+  if (p === '/api/jazz/ping' && req.method === 'POST') {
+    const b = await body(req);
+    if (!await store.auth(b.code, b.token)) { res.statusCode = 403; return send({ ok:false, reason:'권한 없음' }); }
+    pruneJazz();
+    if (!jazzRoom.has(b.code) && jazzRoom.size >= JAZZ_CAP) {
+      res.statusCode = 409; return send({ ok:false, reason:'지금 바가 꽉 찼어요 (' + JAZZ_CAP + '명) · 잠시 후 다시 와주세요' });
+    }
+    const who = await store.whoAmI(b.code);
+    jazzRoom.set(b.code, {
+      who: (who && who.who) || '손님',
+      x: Number(b.x) || 0, y: Number(b.y) || 0, at: Date.now(),
+    });
+    return send({ ok:true, cap: JAZZ_CAP,
+      people: [...jazzRoom].filter(([c]) => c !== b.code).map(([code, v]) => ({ code, ...v })) });
+  }
+  if (p === '/api/jazz/leave' && req.method === 'POST') {
+    const b = await body(req);
+    jazzRoom.delete(b.code);
+    return send({ ok:true });
+  }
+  if (p === '/api/jazz/people' && req.method === 'GET') {
+    pruneJazz();
+    return send({ ok:true, cap: JAZZ_CAP, people: [...jazzRoom].map(([code, v]) => ({ code, ...v })) });
+  }
+
   res.statusCode = 404; send({ ok:false, reason:'없는 주소' });
+}
+
+const JAZZ_CAP = 10;
+const jazzRoom = new Map();                 // code -> { who, x, y, at }
+function pruneJazz() {
+  const cutoff = Date.now() - 15000;         // 15초 넘게 소식 없으면 나간 걸로 친다
+  for (const [code, v] of jazzRoom) if (v.at < cutoff) jazzRoom.delete(code);
 }
 
 // ── 서버 ─────────────────────────────────────────────────────
 http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://localhost');
 
-  if (/^\/api\/(me|signup|login|rename|room|friend|friends|people)(\/|$)/.test(u.pathname)) {
+  if (/^\/api\/(me|signup|login|rename|room|friend|friends|people|jazz)(\/|$)/.test(u.pathname)) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,OPTIONS');

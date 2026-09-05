@@ -88,5 +88,18 @@ const Net = (() => {
       return (await post('/api/friend', { code:me.code, token:me.token, friend:c })).friends;
     },
     async people() { return (await call('/api/people')).people; },
+
+    // 재즈바 실시간 동시접속 — 정원이 차면 서버가 거절한다 (reason 에 담겨 온다)
+    async jazzPing(x, y) {
+      if (!me) return { people:[], cap:10 };
+      return post('/api/jazz/ping', { code:me.code, token:me.token, x, y });
+    },
+    jazzLeave() {
+      if (!me) return;
+      // 페이지를 벗어날 때도 보낼 수 있게 fetch + keepalive — await 안 한다
+      try { fetch('/api/jazz/leave', { method:'POST', keepalive:true,
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({ code:me.code, token:me.token }) }); } catch (e) {}
+    },
   };
 })();
