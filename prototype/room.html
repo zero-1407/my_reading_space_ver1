@@ -400,6 +400,8 @@
                     border:7px solid transparent; border-top-color:#FFFDF8; border-bottom:0; z-index:1; }
   #bb-name { font-size:11.5px; font-weight:700; color:var(--amber); margin-bottom:5px;
              letter-spacing:.02em; }
+  /* 메뉴처럼 항목이 많아지면 말풍선이 화면 밖으로 넘치지 않고 안에서 스크롤된다 */
+  #bb-scroll { max-height:min(52vh, 400px); overflow-y:auto; }
   #bb-text { font-size:13.5px; line-height:1.75; color:var(--ink); min-height:44px; }
   #bb-next { font-size:10.5px; color:var(--ink3); text-align:right; margin-top:6px; }
   #bb-choices { display:flex; flex-direction:column; gap:5px; margin-top:10px; }
@@ -756,8 +758,10 @@
   </div>
   <div id="bubble">
     <div id="bb-name"></div>
-    <div id="bb-text"></div>
-    <div id="bb-choices"></div>
+    <div id="bb-scroll">
+      <div id="bb-text"></div>
+      <div id="bb-choices"></div>
+    </div>
     <div id="bb-next">눌러서 계속 ▸</div>
   </div>
   <div id="ridebar">

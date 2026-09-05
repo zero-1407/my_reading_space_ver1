@@ -13,6 +13,13 @@ const W = 256, H = 144;                 // 실내 한 칸의 크기
 const VIEW_IN = { w:256, h:144, s:4 }, VIEW_OUT = { w:512, h:288, s:2 };
 let VW = VIEW_IN.w, VH = VIEW_IN.h, SCALE = VIEW_IN.s;
 const view = document.getElementById('c'), vctx = view.getContext('2d');
+// 캔버스는 내부적으로 늘 VW*SCALE 픽셀로 그려지지만, 좁은 화면(휴대폰 등)에서는
+// CSS max-width:100% 로 화면에 더 작게 표시된다. 말풍선·이름표·건물 이름표처럼
+// HTML 로 얹는 것들은 이 실제 배율을 곱해줘야 화면 크기와 상관없이 제자리에 온다.
+function dispScale() {
+  const w = view.getBoundingClientRect().width;
+  return w ? w / view.width : 1;
+}
 const buf = document.createElement('canvas'); buf.width = VW; buf.height = VH;
 const ctx = buf.getContext('2d');
 Art.bind(ctx);
@@ -381,10 +388,16 @@ function renderDialog() {
 }
 function placeBubble() {
   if (!dialog) return;
-  const sx = dialog.at ? (dialog.at.x - camX) * SCALE : view.width / 2;
-  const sy = dialog.at ? (dialog.at.y - camY) * SCALE - 16 : view.height / 2;
-  bubble.style.left = Math.max(160, Math.min(view.width - 160, sx)) + 'px';
-  bubble.style.top  = Math.max(150, sy) + 'px';
+  const rect = view.getBoundingClientRect(), ds = dispScale();
+  const sx = dialog.at ? (dialog.at.x - camX) * SCALE * ds : rect.width / 2;
+  const sy = dialog.at ? (dialog.at.y - camY) * SCALE * ds - 16 : rect.height / 2;
+  // 말풍선은 아래에서 위로 자란다 — 항목이 많아 길어지면(메뉴 등) 캔버스 위로
+  // 잘려나가지 않게, 실제 높이만큼 최소 top 을 밀어준다. 캔버스 자체가 좁은
+  // 휴대폰에서는 이 때문에 말풍선이 캔버스 아래로 살짝 걸칠 수 있는데, 그건
+  // #stage 가 overflow:visible 이라 그냥 그 위에 겹쳐 보일 뿐 잘리지 않는다.
+  const bh = bubble.offsetHeight || 150;
+  bubble.style.left = Math.max(160, Math.min(rect.width - 160, sx)) + 'px';
+  bubble.style.top  = Math.max(bh + 10, sy) + 'px';
 }
 function markSel() {
   const box = $('bb-choices');
@@ -808,8 +821,8 @@ view.addEventListener('click', e => {
   Audio8.wake();
   if (edit || openOv) return;
   if (dialog) { advanceDialog(); return; }
-  const r = view.getBoundingClientRect();
-  const wx = (e.clientX - r.left) / SCALE + camX, wy = (e.clientY - r.top) / SCALE + camY;
+  const r = view.getBoundingClientRect(), ds = dispScale();
+  const wx = (e.clientX - r.left) / (SCALE * ds) + camX, wy = (e.clientY - r.top) / (SCALE * ds) + camY;
   const t = hitAt(wx, wy);
   if (t) {
     if (t.m === 'x') {                                 // 벽 물건 — 그 앞으로 걸어간다
@@ -1186,11 +1199,12 @@ function renderNames() {
   if (solo || !live.length) { box.innerHTML = ''; $('livebadge').classList.remove('on'); return; }
   if (box.children.length !== live.length)
     box.innerHTML = live.map(p => '<span class="nm2 live"></span>').join('');
+  const ds = dispScale();
   live.forEach((p, i) => {
     const el = box.children[i];
     el.textContent = p.name;
-    el.style.left = ((p.x + 5 - camX) * SCALE) + 'px';
-    el.style.top  = ((p.y - camY) * SCALE) + 'px';
+    el.style.left = ((p.x + 5 - camX) * SCALE * ds) + 'px';
+    el.style.top  = ((p.y - camY) * SCALE * ds) + 'px';
   });
   $('live-n').textContent = live.length;
   $('livebadge').innerHTML = '● 친구 <b id="live-n">' + live.length + '</b>명이 나와 있어요';
@@ -2950,8 +2964,8 @@ editbar.querySelectorAll('[data-sort]').forEach(btn => btn.onclick = () => {
   layoutRoom(ROOMS[0]); Audio8.play('page'); toast(btn.textContent + '으로 정리했어요');
 });
 const toWorld = e => {
-  const r = view.getBoundingClientRect();
-  return { x:(e.clientX - r.left) / SCALE + camX, y:(e.clientY - r.top) / SCALE + camY };
+  const r = view.getBoundingClientRect(), ds = dispScale();
+  return { x:(e.clientX - r.left) / (SCALE * ds) + camX, y:(e.clientY - r.top) / (SCALE * ds) + camY };
 };
 view.addEventListener('mousedown', e => {
   if (!edit || openOv) return;
@@ -3096,11 +3110,11 @@ function buildLabels() {
     '<span class="lab ' + (l.c || '') + '" data-i="' + i + '">' + l.t + '</span>').join('');
 }
 function placeLabels() {
-  const box = $('labels');
+  const box = $('labels'), rect = view.getBoundingClientRect(), ds = dispScale();
   box.querySelectorAll('.lab').forEach(el => {
     const l = LABELS[+el.dataset.i];
-    const sx = (l.x - camX) * SCALE, sy = (l.y - camY) * SCALE;
-    const vis = sx > -60 && sx < view.width + 60 && sy > -20 && sy < view.height + 20;
+    const sx = (l.x - camX) * SCALE * ds, sy = (l.y - camY) * SCALE * ds;
+    const vis = sx > -60 && sx < rect.width + 60 && sy > -20 && sy < rect.height + 20;
     el.style.display = vis ? 'block' : 'none';
     el.style.left = sx + 'px'; el.style.top = sy + 'px';
   });
@@ -4104,9 +4118,10 @@ function frame(t) {
   // 초점 말풍선
   const tip = $('tip');
   if (focus && !edit && !openOv && !dialog) {
+    const ds = dispScale();
     tip.textContent = focus.label;
-    tip.style.left = ((focus.px - camX) * SCALE) + 'px';
-    tip.style.top  = ((focus.py - camY) * SCALE - 24) + 'px';
+    tip.style.left = ((focus.px - camX) * SCALE * ds) + 'px';
+    tip.style.top  = ((focus.py - camY) * SCALE * ds - 24) + 'px';
     tip.classList.add('on');
   } else tip.classList.remove('on');
   updateLive(dt); renderNames();
