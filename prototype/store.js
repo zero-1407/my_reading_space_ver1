@@ -113,9 +113,12 @@ module.exports = {
     return !!one(await sb('/su_users?code=eq.' + enc(code) + '&select=code'));
   },
 
-  // 방 저장 — 통째로 덮어쓴다
+  // 방 저장 — 통째로 덮어쓰되, letters 는 클라이언트가 아예 안 보내는 값이라
+  // 그대로 두면 그 사이 도착한 편지가 지워진다. 있던 걸 다시 끼워 넣는다.
   async putRoom(code, room) {
+    const prev = one(await sb('/su_rooms?code=eq.' + enc(code) + '&select=room'));
     const saved = Object.assign({}, room, { code, at: Date.now() });
+    if (prev && prev.room && prev.room.letters) saved.letters = prev.room.letters;
     await sb('/su_rooms?on_conflict=code', {
       method: 'POST', headers: Object.assign({}, H, { Prefer: 'resolution=merge-duplicates' }),
       body: JSON.stringify({ code, room: saved, updated_at: Date.now() }),
