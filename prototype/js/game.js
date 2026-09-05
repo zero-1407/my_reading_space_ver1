@@ -97,6 +97,17 @@ function shopRug(x, y, w, h, c) {
   px(x + 5, y + 4, w - 10, h - 8, shade(c, 1.18));
   px(x + 12, y + 9, w - 24, h - 18, c);
 }
+// 흐트러진 듯 성글게 찍는 명암 — 깨끗한 flat fill 대신 손으로 대충 찍은 듯한 질감
+function dith(x, y, w, h, c1, c2) {
+  for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++)
+    if ((xx + yy * 2) % 3 !== 2) px(x + xx, y + yy, 1, 1, (xx + yy) % 2 ? c1 : c2);
+}
+// 줄무늬 러그 — 매장 바닥에 깔린 텍스타일. 깨끗한 동심원 대신 손짜임 패턴 느낌으로
+function textileRug(x, y, w, h, base, accent) {
+  px(x, y, w, h, base);
+  for (let i = 2; i < w - 2; i += 5) px(x + i, y + 2, 2, h - 4, shade(accent, 1.06));
+  px(x + 2, y + 2, w - 4, 1, shade(base, 1.3)); px(x + 2, y + h - 3, w - 4, 1, shade(base, .7));
+}
 const SHOPS = {
   post: {
     title:'우체국', wall:'#F0E0D4', floor:'#D8B896', wood:'#B4805A', rug:'#C4645C',
@@ -156,39 +167,61 @@ const SHOPS = {
     },
   },
   flower: {
-    title:'꽃집', wall:'#EAF2E2', floor:'#BFCE9E', wood:'#6E9A6E', rug:'#8AAE7A',
-    staff:{ h:'#3d2b28', c:'#7fa88a' }, deskLabel:'화분 고르기',
+    title:'꽃집', wall:'#E6DCC2', floor:'#B99A72', wood:'#7A6248', rug:'#B5764F',
+    staff:{ h:'#3d2b28', c:'#93A374' }, deskLabel:'화분 고르기',
     action: () => openFlower(),
     decor(t) {
       shopWindow(232, 10, 42, 36);
-      // 왼쪽 벽 — 진열용 화분 줄 (잎이 큰 것 · 작은 것 섞어서)
-      ['#D4645C', '#E8B45A', '#8A7AAE', '#D48AAE', '#C4645C'].forEach((c, i) => {
-        const x = 12 + i * 20;
-        px(x, 82, 16, 14, '#8A6A44'); px(x + 1, 82, 14, 3, '#6E5238');
-        px(x + 2, 62, 12, 20, c);
-        px(x + 3, 58, 3, 6, '#5F9A5A'); px(x + 8, 56, 3, 8, '#5F9A5A');   // 잎 두 갈래
+      // 벽지 — 흩뿌린 잎사귀 무늬 (깨끗한 단색 대신 손으로 콕콕 찍은 듯)
+      [[8,10],[36,6],[74,14],[130,8],[176,16],[20,32],[96,4],[150,26]].forEach(([x,y]) => {
+        px(x, y, 3, 5, shade('#93A374', .92)); px(x + 1, y - 1, 1, 2, shade('#93A374', 1.1));
       });
-      // 유리 진열장 — 꽃다발이 가득
+      // 왼쪽 벽 — 화분 줄, 높이도 크기도 제각각으로 (줄 맞춘 진열대가 아니라 그냥 놓인 느낌)
+      //  꽃은 은은한 배경 위에서 또렷하게 보여야 하니 잎은 낮춘 색, 꽃 색만 또렷하게 남긴다
+      const pots = [
+        { x:8,  y:92, w:17, h:11, pc:'#A85C46', fc:'#D4645C', lh:20, tilt:-1 },
+        { x:28, y:86, w:13, h:15, pc:'#8A6A44', fc:null,      lh:26, tilt:1 },
+        { x:46, y:96, w:19, h:9,  pc:'#B5764F', fc:'#E0A54C', lh:15, tilt:0 },
+        { x:70, y:90, w:14, h:13, pc:'#7A6248', fc:null,      lh:22, tilt:-1 },
+        { x:90, y:97, w:16, h:8,  pc:'#A85C46', fc:'#C98A7C', lh:14, tilt:1 },
+      ];
+      pots.forEach(p => {
+        px(p.x, p.y, p.w, p.h, p.pc);
+        px(p.x + 1, p.y, p.w - 2, 3, shade(p.pc, 1.2));
+        px(p.x + 1, p.y + p.h - 3, p.w - 2, 2, shade(p.pc, .7));
+        const cx = p.x + p.w / 2 + p.tilt, top = p.y - p.lh;
+        px(cx - 1, top + 4, 2, p.lh - 4, '#5F7A4A');                       // 줄기
+        px(cx - 5, top + 6, 4, 3, '#7C8F5A'); px(cx + 1, top + 10, 5, 3, '#8A9A6E'); // 잎 두 갈래
+        px(cx - 4, top + 12, 3, 3, '#6E8557');
+        if (p.fc) { px(cx - 3, top - 2, 7, 6, p.fc); px(cx - 1, top - 4, 3, 3, shade(p.fc, 1.2)); }
+      });
+      // 유리 진열장 — 꽃다발이 가득, 뒤섞인 채로 (일렬로 꽂아둔 게 아니라 한 아름 안긴 느낌)
       const gx = 118, gy = 40, gw = 96, gh = 46;
-      px(gx - 2, gy - 2, gw + 4, gh + 4, '#8A6A44');
-      px(gx, gy, gw, gh, '#DCEEF2');
-      [0, 1, 2, 3].forEach(i => px(gx + 2, gy + 2 + i * 11, gw - 4, 1, 'rgba(255,255,255,.5)'));
-      const bunch = ['#D4645C', '#E8B45A', '#D48AAE', '#8A7AAE', '#EFA0B0', '#F0C46A'];
+      px(gx - 2, gy - 2, gw + 4, gh + 4, '#7A6248');
+      px(gx, gy, gw, gh, 'rgba(220,232,224,.6)');
+      [0, 1, 2, 3].forEach(i => px(gx + 2, gy + 2 + i * 11, gw - 4, 1, 'rgba(255,255,255,.35)'));
+      const bunch = ['#D4645C', '#E0A54C', '#C98A7C', '#8A7AAE', '#D48AAE'];
       for (let i = 0; i < 7; i++) {
-        const bx = gx + 6 + i * 13, by = gy + gh - 8 - (i % 3) * 4;
-        px(bx, by, 3, 10, '#5F9A5A');                                     // 줄기
-        px(bx - 3, by - 8, 9, 8, bunch[i % bunch.length]);                // 꽃 뭉치
-        px(bx - 1, by - 10, 5, 3, shade(bunch[i % bunch.length], 1.25));
+        const bx = gx + 6 + i * 13 + (i % 2 ? 3 : -2), by = gy + gh - 8 - (i % 3) * 5;
+        const col = bunch[i % bunch.length];
+        px(bx, by, 3, 10, '#6E8557');                                     // 줄기
+        px(bx - 3, by - 9, 4, 5, col); px(bx + 1, by - 7, 4, 5, shade(col, 1.1));  // 꽃 뭉치 — 이지러진 두 덩이
+        px(bx - 2, by - 11, 3, 3, shade(col, 1.25));
       }
-      px(gx, gy + gh - 2, gw, 2, '#8A6A44');
-      // 화분 나무 두 그루 — 문 옆
+      px(gx, gy + gh - 2, gw, 2, '#7A6248');
+      // 화분 나무 두 그루 — 문 옆, 색을 낮춰서
       [[228, 88, 22], [252, 92, 18]].forEach(([x, y, s]) => {
-        px(x, y, s * .5, s * .3, '#8A6A44');
-        px(x + s * .1, y - s * .8, s * .3, s * .8, '#5F9A5A');
-        px(x + s * .16, y - s * .95, s * .18, s * .3, '#7CBC72');
+        px(x, y, s * .5, s * .3, '#7A6248');
+        px(x + s * .1, y - s * .8, s * .3, s * .8, '#7C8F5A');
+        dith(x + s * .1, y - s * .8, s * .3, s * .3, shade('#93A374', 1.2), '#8A9A6E');
+        px(x + s * .16, y - s * .95, s * .18, s * .3, '#8A9A6E');
       });
-      px(64, 16, 3, 20, '#5A7A52'); px(58, 8, 16, 12, '#6E9A6E');          // 매달린 화분
-      px(108, 20, 3, 16, '#5A7A52'); px(102, 12, 16, 12, '#7CBC72');
+      px(64, 16, 3, 20, '#7A6248'); px(58, 8, 16, 12, '#93A374');          // 매달린 화분
+      px(108, 20, 3, 16, '#7A6248'); px(102, 12, 16, 12, '#8A9A6E');
+      // 화분들 앞 — 물뿌리개와 흩어진 꽃잎 (정돈되지 않은 일상의 흔적), 책상 자리는 피해서
+      px(20, 114, 9, 7, '#8A8A78'); px(27, 111, 5, 4, '#8A8A78'); px(31, 113, 3, 1, '#8A8A78');
+      [[36,120],[42,116],[47,122]].forEach(([x,y]) => px(x, y, 2, 2, '#C98A7C'));
+      textileRug(96, 113, 46, 15, '#B5764F', '#8A6A44');
     },
   },
   museum: {
@@ -215,7 +248,7 @@ const BLD = {
   post:  { x:534, y:46,  w:118, h:72,  name:'우체국', shape:'tower', roof:'#C4645C', wall:'#F0E0D4' },
   furn:  { x:566, y:206, w:132, h:88,  name:'가구점', shape:'shed',  roof:'#8A7A4E', wall:'#F0E8D0' },
   cafe:  { x:392, y:214, w:86,  h:62,  name:'찻집',   shape:'gable', roof:'#B07A9A', wall:'#F6E6EE' },
-  flower:{ x:196, y:222, w:74,  h:54,  name:'꽃집',   shape:'greenhouse', roof:'#8AC4CC', wall:'#EAF2E2' },
+  flower:{ x:196, y:222, w:74,  h:54,  name:'꽃집',   shape:'greenhouse', roof:'#93A9A0', wall:'#E6DCC2' },
   museum:{ x:712, y:52,  w:140, h:94,  name:'박물관', shape:'dome',  roof:'#A87858', wall:'#EDE0CC' },
   jazz:  { x:388, y:300, w:126, h:80,  name:'재즈바 한밤', shape:'bar', roof:'#4A3E52', wall:'#6B5A72' },
   train: { x:246, y:414, w:186, h:88,  name:'기차역', shape:'flat',  roof:'#6E7A96', wall:'#E4E2EE' },
