@@ -239,6 +239,18 @@
   #skipbar.on { display:flex; }
   #skipbar b { color:var(--amber); }
 
+  #jazzchat { position:absolute; left:50%; bottom:14px; transform:translateX(-50%);
+              display:none; align-items:center; gap:6px; z-index:6;
+              background:rgba(30,24,38,.88); border:1px solid #5A4A6A;
+              border-radius:18px; padding:6px 8px 6px 14px; box-shadow:0 4px 14px rgba(20,14,28,.35); }
+  #jazzchat.on { display:flex; }
+  #jc-text { width:220px; background:transparent; border:none; outline:none; color:#F0E8F8;
+             font-family:inherit; font-size:12.5px; }
+  #jc-text::placeholder { color:#B0A0C4; }
+  #jc-send { font-family:inherit; font-size:11.5px; padding:6px 12px; border-radius:14px;
+             background:#8A6AAE; border:none; color:#fff; cursor:pointer; }
+  #jc-send:hover { background:#9A7ABE; }
+
   /* 신문 */
   #m-news .card { width:560px; height:100%; max-height:520px; }
   .papers { overflow-y:auto; display:flex; flex-direction:column; gap:0; flex:1; min-height:0;
@@ -783,6 +795,10 @@
     <button id="ride-skip">눈 붙이기 · 바로 도착</button>
   </div>
   <div id="skipbar"><b>💧 물수제비</b><span id="skiptxt"></span></div>
+  <div id="jazzchat">
+    <input id="jc-text" maxlength="60" placeholder="지금 이 바에 있는 사람들에게…" autocomplete="off">
+    <button id="jc-send">보내기</button>
+  </div>
   <div id="toast"></div>
   <div id="fade"></div>
 

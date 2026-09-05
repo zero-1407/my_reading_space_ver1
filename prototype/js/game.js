@@ -1737,9 +1737,10 @@ const JZ = {
 let jazz = null;
 let jazzTimer = null;
 const JAZZ_CAP_FALLBACK = 10;                          // 서버가 처음 응답하기 전 표시용
-function pingJazz() {
+let myChat = null;                                    // 내가 방금 보낸 채팅 — 내 화면에도 바로 보여준다
+function pingJazz(say) {
   if (!jazz || !Net.online) return;
-  Net.jazzPing(Math.round(player.x), Math.round(player.y)).then(r => {
+  Net.jazzPing(Math.round(player.x), Math.round(player.y), say).then(r => {
     if (!jazz) return;
     if (!r.ok) { toast(r.reason || '재즈바 접속에 문제가 있어요'); return; }
     jazz.cap = r.cap;
@@ -1747,6 +1748,17 @@ function pingJazz() {
     refreshUI();
   }).catch(() => {});
 }
+function sendJazzChat() {
+  const el = $('jc-text'), text = el.value.trim();
+  if (!text) return;
+  el.value = '';
+  myChat = { text, at: Date.now() };
+  Audio8.play('select');
+  pingJazz(text);
+  refreshUI();
+}
+$('jc-send').onclick = sendJazzChat;
+$('jc-text').addEventListener('keydown', e => { if (e.key === 'Enter') sendJazzChat(); });
 function stopJazzLive() {
   if (jazzTimer) { clearInterval(jazzTimer); jazzTimer = null; }
   Net.jazzLeave();
@@ -3295,6 +3307,7 @@ function refreshUI() {
   $('p-who').textContent = t; $('p-bio').textContent = s;
   $('btn-out').innerHTML = inTown() ? '🗺 어디로 갈까<span class="kbd"> (M)</span>' : '🚪 밖으로 나가기<span class="kbd"> (Q)</span>';
   $('btn-edit').style.display = isHome() ? 'inline-block' : 'none';
+  $('jazzchat').classList.toggle('on', inJazz() && Net.online);
   buildLabels(); renderStats();
 }
 function renderDex() {
@@ -3363,8 +3376,12 @@ function buildLabels() {
     STALLS.forEach(s => LABELS.push({ t: s.name, x: s.x + s.w / 2, y: s.y - 34 }));
     LABELS.push({ t:'교환대', x: USED_SWAP.x + 26, y: USED_SWAP.y - 30 });
   } else if (inJazz()) {
-    // 실시간으로 와 있는 진짜 회원만 이름표를 띄운다 — 나머지 손님은 배경 손님이다
-    (jazz.live || []).forEach(p => LABELS.push({ t: '🟢 ' + p.who, x: p.x + 5, y: p.y - 16, c:'mine' }));
+    // 실시간으로 와 있는 진짜 회원만 이름표를 띄운다 — 나머지 손님은 배경 손님이다.
+    // 최근 6초 안에 뭔가 말했으면 이름 옆에 그대로 보여준다 (실시간 채팅).
+    (jazz.live || []).forEach(p => LABELS.push({
+      t: '🟢 ' + p.who + (p.say ? ' : ' + p.say : ''), x: p.x + 5, y: p.y - 16, c:'mine' }));
+    if (myChat && Date.now() - myChat.at < 6000)
+      LABELS.push({ t: '💬 ' + myChat.text, x: player.x + 5, y: player.y - 16, c:'mine' });
   } else if (inShop() && place.key === 'cafe' && place.level === 2) {
     LABELS.push({ t:'안으로', x: SHOP_STAIRS.x + SHOP_STAIRS.w / 2, y: SHOP_STAIRS.y - 4 });
   } else if (inShop()) {

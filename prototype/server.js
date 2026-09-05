@@ -352,12 +352,19 @@ async function api(req, res, u) {
       res.statusCode = 409; return send({ ok:false, reason:'지금 바가 꽉 찼어요 (' + JAZZ_CAP + '명) · 잠시 후 다시 와주세요' });
     }
     const who = await store.whoAmI(b.code);
+    const prev = jazzRoom.get(b.code);
+    let say = String(b.say || '').trim().slice(0, 80);
+    if (say && BLOCK.some(w => say.includes(w))) say = '';          // 조용히 걸러낸다 — 위치 갱신은 그대로 성공시킨다
+    const sayAt = say ? Date.now() : (prev && prev.sayAt);
     jazzRoom.set(b.code, {
       who: (who && who.who) || '손님',
       x: Number(b.x) || 0, y: Number(b.y) || 0, at: Date.now(),
+      say: say || (prev && prev.say) || '', sayAt: sayAt || 0,
     });
+    const fresh = v => v.sayAt && Date.now() - v.sayAt < 6000;
     return send({ ok:true, cap: JAZZ_CAP,
-      people: [...jazzRoom].filter(([c]) => c !== b.code).map(([code, v]) => ({ code, ...v })) });
+      people: [...jazzRoom].filter(([c]) => c !== b.code)
+        .map(([code, v]) => ({ code, who:v.who, x:v.x, y:v.y, say: fresh(v) ? v.say : '' })) });
   }
   if (p === '/api/jazz/leave' && req.method === 'POST') {
     const b = await body(req);

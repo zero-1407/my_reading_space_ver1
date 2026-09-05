@@ -120,9 +120,9 @@ const Net = (() => {
     },
 
     // 재즈바 실시간 동시접속 — 정원이 차면 서버가 거절한다 (reason 에 담겨 온다)
-    async jazzPing(x, y) {
+    async jazzPing(x, y, say) {
       if (!me) return { people:[], cap:10 };
-      return post('/api/jazz/ping', { code:me.code, token:me.token, x, y });
+      return post('/api/jazz/ping', { code:me.code, token:me.token, x, y, say });
     },
     jazzLeave() {
       if (!me) return;
