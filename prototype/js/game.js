@@ -71,6 +71,68 @@ const STALLS = [
 const USED_SWAP = { x:418, y:88, w:52, h:20 };       // 교환대
 const CAT = { x:352, y:80 };
 
+// 작은 가게들 안 — 우체국 · 가구점 · 찻집 · 꽃집 · 박물관.
+// 전부 이 하나의 틀(SHOP_*)을 같이 쓰고, 가게마다 색과 장식(decor)만 다르다.
+const SHOP_W = 320;
+const SHOP_DOOR = { x:10, y:18, w:34, h:52 };
+const SHOP_DESK = { x:150, y:88, w:70, h:20 };
+const SHOPS = {
+  post: {
+    title:'우체국', wall:'#F0E0D4', floor:'#D8B896', wood:'#B4805A',
+    staff:{ h:'#3a2e28', c:'#C4645C' }, deskLabel:'우편함 확인하기',
+    action: () => openPost(),
+    decor(t) {
+      for (let r = 0; r < 2; r++) for (let c = 0; c < 6; c++)     // 우편함 칸
+        px(20 + c * 18, 26 + r * 20, 15, 17, (r + c) % 2 ? '#E8C46A' : '#F0DFA0');
+      px(18, 24, 110, 2, '#8A6444');
+    },
+  },
+  furn: {
+    title:'가구점', wall:'#F0E8D0', floor:'#C8A876', wood:'#8A6A44',
+    staff:{ h:'#4a3a2e', c:'#9aa87e' }, deskLabel:'방에 놓을 것 고르기',
+    action: () => openFurniture(),
+    decor(t) {
+      px(20, 40, 10, 20, '#B08A5E'); px(21, 34, 8, 8, '#F0DFA0');           // 램프
+      px(44, 44, 14, 16, '#8A6A44'); px(44, 40, 14, 4, '#A88A5E');          // 의자
+      px(70, 30, 22, 30, '#C8A876'); px(70, 30, 22, 3, '#8A6A44');          // 서랍장
+      px(75, 38, 4, 4, '#6E5238'); px(83, 38, 4, 4, '#6E5238');
+    },
+  },
+  cafe: {
+    title:'찻집', wall:'#F6E6EE', floor:'#D8A8B8', wood:'#8A5A6E',
+    staff:{ h:'#5a4030', c:'#B07A9A' }, deskLabel:'차 한 잔 주문하기',
+    action: () => say('찻집 주인', ['오늘은 뭘 읽고 계세요?',
+      '차 한 잔 드릴게요. 여기 앉아서 읽다 가셔도 돼요.'],
+      [{ label:'☕ 한 잔 마시기', fn: () => { Audio8.play('coin'); toast('따뜻한 차를 마셨어요 · 잠깐 쉬었습니다'); } },
+       { label:'그냥 지나가기' }]),
+    decor(t) {
+      px(24, 40, 24, 20, '#6E4E3A'); px(24, 40, 24, 3, '#8A6A50');          // 원탁
+      px(30, 34, 4, 6, '#EFE4D0'); px(38, 34, 4, 6, '#D8645C');            // 찻잔
+      px(70, 20, 3, 26, '#5A7A52'); px(64, 12, 16, 12, '#6E9A6E');         // 매달린 화분
+    },
+  },
+  flower: {
+    title:'꽃집', wall:'#EAF2E2', floor:'#BFCE9E', wood:'#6E9A6E',
+    staff:{ h:'#3d2b28', c:'#7fa88a' }, deskLabel:'화분 고르기',
+    action: () => openFlower(),
+    decor(t) {
+      ['#D4645C', '#E8B45A', '#8A7AAE', '#D48AAE'].forEach((c, i) => {
+        px(18 + i * 22, 44, 16, 12, '#8A6A44'); px(20 + i * 22, 30, 12, 14, c);
+      });
+    },
+  },
+  museum: {
+    title:'박물관', wall:'#F0EDE4', floor:'#C8C4B4', wood:'#8A8A96',
+    staff:{ h:'#2b2b33', c:'#8A8A96' }, deskLabel:'지금 하는 전시 보기',
+    action: () => openExpo(),
+    decor(t) {
+      [[18, '#D4645C'], [56, '#4A6EB0'], [94, '#5FB0B8']].forEach(([ox, c]) => {
+        px(ox, 18, 26, 20, '#3A342C'); px(ox + 2, 20, 22, 16, c);
+      });
+    },
+  },
+};
+
 // ── 마을 건물 배치 (모든 마을이 같은 틀) ──────────────────────
 //  shape : gable 박공지붕 · flat 평지붕 · tower 종탑 · dome 둥근지붕 · shed 낮은 창고
 const BLD = {
@@ -308,13 +370,15 @@ const inLib  = () => place.kind === 'library';
 const inUsed = () => place.kind === 'used';
 const inRide = () => place.kind === 'ride';
 const inJazz = () => place.kind === 'jazz';
+const inShop = () => place.kind === 'shop';
 const isHome = () => inRoom() && place.idx === 0;
 const room   = () => ROOMS[place.idx];
 const town   = () => TOWNS[place.vi];
 const vill   = () => VIL[place.vi];
 const world  = () => inTown() ? TOWN : inLib() ? { w: LIB_W, h: H }
                    : inUsed() ? { w: USED_W, h: H } : inRide() ? { w: RIDE_W, h: H }
-                   : inJazz() ? { w: JAZZ_W, h: H } : { w: ROOM_W, h: H };
+                   : inJazz() ? { w: JAZZ_W, h: H } : inShop() ? { w: SHOP_W, h: H }
+                   : { w: ROOM_W, h: H };
 
 const shelves  = R => R.items.filter(i => i.kind === 'shelf');
 const allBooks = R => shelves(R).flatMap(s => s.books);
@@ -564,6 +628,12 @@ function targets() {
     return out;
   }
   if (inJazz()) return out;                    // 나가는 중(place는 아직 jazz, jazz 객체는 이미 비움) — 아무 것도 없다
+  if (inShop()) {
+    const S = SHOPS[place.key];
+    addX({ type:'out' }, SHOP_DOOR.x + 17, 22, S.title + '에서 나가기', 8, 66);
+    add({ type:'shopdesk' }, SHOP_DESK.x + 35, SHOP_DESK.y - 10, S.deskLabel, 26);
+    return out;
+  }
   if (inRide()) {
     const R = RIDES[ride.mode];
     addX({ type:'rideout' }, RIDE_W - 23, 22,
@@ -697,8 +767,9 @@ const ACTIONS = {
                          : p.grow < 6 ? '제법 잎이 무성해졌어요' : '꽃대가 올라오고 있어요';
              say('화분', ['물을 주었습니다.', stage + ' (' + p.grow + '일째)'],
                [{ label:'잘 자라라' }]); },
-  furn:    openFurniture,
-  museum:  openExpo,
+  furn:    () => enterShop('furn'),
+  museum:  () => enterShop('museum'),
+  shopdesk:() => SHOPS[place.key].action(),
   news:    openNews,
   visit:   openVisit,
   jazz:    enterJazz,
@@ -766,11 +837,8 @@ const ACTIONS = {
     }
     dialog.at = { x: POND.x + POND.w / 2, y: POND.y }; placeBubble();
   },
-  cafe:    () => say('찻집 주인', ['오늘은 뭘 읽고 계세요?',
-             '차 한 잔 드릴게요. 여기 앉아서 읽다 가셔도 돼요.'],
-             [{ label:'☕ 한 잔 마시기', fn: () => toast('따뜻한 차를 마셨어요 · 잠깐 쉬었습니다') },
-              { label:'그냥 지나가기' }]),
-  flower:  openFlower,
+  cafe:    () => enterShop('cafe'),
+  flower:  () => enterShop('flower'),
   festival:() => {
     const F = SEASON.festival;
     const cs = [{ label:'좋네요' }];
@@ -797,7 +865,7 @@ const ACTIONS = {
                '(당신을 한참 본다)'])], [{ label:'쓰다듬기', fn:() => toast('고양이가 눈을 감았어요') },
                { label:'그냥 지나가기' }]);
              dialog.at = { x: CAT.x + 5, y: CAT.y }; placeBubble(); },
-  post:    openPost,
+  post:    () => enterShop('post'),
   bus:     () => openMap('kr'),
   train:   () => openMap('kr'),
   air:     openWorld,
@@ -885,7 +953,7 @@ function goOut() {
   if (inRide()) { toast('아직 달리는 중이에요'); return; }
   Audio8.play('door');
   const vi = place.vi, from = place.kind === 'room' ? place.idx : null;
-  const wasUsed = inUsed(), wasJazz = inJazz();
+  const wasUsed = inUsed(), wasJazz = inJazz(), shopKey = inShop() ? place.key : null;
   if (wasJazz) stopJazzLive();
   transition(() => {
     // place 와 jazz 를 같은 순간에 같이 바꾼다 — 둘이 따로 놀면(전환 애니메이션
@@ -895,7 +963,7 @@ function goOut() {
     place = { kind:'town', vi };
     spawnTown(); scatterDrops(); spawnLive();
     const h = from !== null ? town().houses.find(x => x.to === from) : null;
-    const d = h ? doorOf(h) : doorOf(wasJazz ? BLD.jazz : wasUsed ? BLD.used : BLD.lib);
+    const d = h ? doorOf(h) : doorOf(shopKey ? BLD[shopKey] : wasJazz ? BLD.jazz : wasUsed ? BLD.used : BLD.lib);
     player.x = d.x + d.w / 2 - 5; player.y = d.y + 16;
     player.dir = 'down'; refreshUI();
   });
@@ -1280,6 +1348,16 @@ function stockUsed() {
     swapped: (usedStock && usedStock.swapped) || [],   // 사람들이 내놓고 간 책
   };
 }
+function enterShop(key) {
+  Audio8.play('door');
+  transition(() => {
+    const vi = place.vi;
+    place = { kind:'shop', key, vi };
+    live = [];
+    player.x = SHOP_DOOR.x + 8; player.y = 108; player.dir = 'down';
+    camX = camY = 0; refreshUI();
+  });
+}
 function enterUsed() {
   Audio8.play('door');
   transition(() => {
@@ -1380,7 +1458,7 @@ function openFurniture() {
   say('가구점 주인', ['방에 놓을 것들이에요.', '사면 바로 방으로 배달해 드립니다.'],
     FURNITURE.map(f => ({ label:'🪑 ' + f.name + ' — ' + f.d, fn: () => buyInto(f.mk, f.name) }))
       .concat([{ label:'구경만 할게요' }]));
-  const d = doorOf(BLD.furn); dialog.at = { x:d.x + d.w / 2, y:d.y }; placeBubble();
+  dialog.at = { x:SHOP_DESK.x + 35, y:SHOP_DESK.y - 20 }; placeBubble();
 }
 const PLANTS = [
   { name:'몬스테라', d:'잎이 크게 벌어져요' },
@@ -1394,7 +1472,7 @@ function openFlower() {
       ROOMS[0].items.push(item({ kind:'plant', x:150, y:108, w:10, h:16, grow:0, species:p.name }));
       Audio8.play('coin'); toast(p.name + ' 화분을 샀어요');
     } })).concat([{ label:'다음에 올게요' }]));
-  const d = doorOf(BLD.flower); dialog.at = { x:d.x + d.w / 2, y:d.y }; placeBubble();
+  dialog.at = { x:SHOP_DESK.x + 35, y:SHOP_DESK.y - 20 }; placeBubble();
 }
 
 // ── 피크닉 ────────────────────────────────────────────────────
@@ -2436,7 +2514,7 @@ function openPost() {
     { label:'📮 내 우편함 열기', fn: () => openMail(0) },
     { label:'그냥 나가기' },
   ]);
-  const d = doorOf(BLD.post); dialog.at = { x:d.x + d.w / 2, y:d.y }; placeBubble();
+  dialog.at = { x:SHOP_DESK.x + 35, y:SHOP_DESK.y - 20 }; placeBubble();
 }
 
 // ── 우편함 · 편지 ─────────────────────────────────────────────
@@ -3031,11 +3109,13 @@ function refreshUI() {
   const v = vill();
   const t = inRide() ? RIDES[ride.mode].name + ' 안'
           : inJazz() ? '재즈바 한밤'
+          : inShop() ? SHOPS[place.key].title
           : inTown() ? v.name : inLib() ? v.lib : inUsed() ? '헌책방'
           : isHome() ? '내 방' : room().who + '의 방';
   const s = inJazz() ? (Net.online
             ? '실시간 ' + ((jazz.live ? jazz.live.length : 0) + 1) + ' / ' + (jazz.cap || JAZZ_CAP_FALLBACK) + '명 · 🟢 이름표가 진짜 회원이에요'
             : '지금 ' + jazz.crowd + ' / ' + BAR_CAP + '명 · 혼자 모드 예시 손님입니다')
+          : inShop()  ? v.name + ' · ' + SHOPS[place.key].deskLabel
           : inRide() ? VIL[ride.to].name + ' 로 가는 중'
           : inTown() ? v.where + ' · ' + v.theme + ' · 회원 ' + v.members + '명'
           : inLib()  ? '장서 ' + v.books + ' · 서가 열 칸'
@@ -3109,6 +3189,8 @@ function buildLabels() {
   } else if (inJazz()) {
     // 실시간으로 와 있는 진짜 회원만 이름표를 띄운다 — 나머지 손님은 배경 손님이다
     (jazz.live || []).forEach(p => LABELS.push({ t: '🟢 ' + p.who, x: p.x + 5, y: p.y - 16, c:'mine' }));
+  } else if (inShop()) {
+    LABELS.push({ t: SHOPS[place.key].deskLabel, x: SHOP_DESK.x + 35, y: SHOP_DESK.y - 26 });
   }
   const box = $('labels');
   box.innerHTML = LABELS.map((l, i) =>
@@ -3879,6 +3961,20 @@ function drawUsed(t) {
   [[178, 130], [312, 132], [412, 128], [468, 130]].forEach(([x, y], i) => bookPile(x, y, 13, 9 + i, i * 3));
 }
 
+// 작은 가게들 — 우체국 · 가구점 · 찻집 · 꽃집 · 박물관이 같은 틀을 쓴다
+function drawShop(t) {
+  const S = SHOPS[place.key], woodDark = shade(S.wood, .66);
+  shellRoom(S, SHOP_W);
+  drawDoorIndoor(S.wood, SHOP_DOOR, isF('out'), t);
+  S.decor(t);
+  const dOn = isF('shopdesk');
+  if (dOn) { ctx.fillStyle = GLOW; ctx.fillRect(SHOP_DESK.x - 5, SHOP_DESK.y - 24, SHOP_DESK.w + 10, SHOP_DESK.h + 28); }
+  px(SHOP_DESK.x, SHOP_DESK.y, SHOP_DESK.w, SHOP_DESK.h, woodDark);
+  px(SHOP_DESK.x, SHOP_DESK.y, SHOP_DESK.w, 4, S.wood);
+  sprite(BODY.down.concat(LEG_A), SHOP_DESK.x + 30, SHOP_DESK.y - 22, false, S.staff);
+  if (dOn) arrow(SHOP_DESK.x + 34, SHOP_DESK.y - 28, t);
+}
+
 const LIB_SKIN = { wall:'#AEAEBE', floor:'#C6B08C', wood:'#BFA478' };
 function plaque(x, y, w, h, base, on, t, rows) {
   if (on) { ctx.fillStyle = GLOW; ctx.fillRect(x - 4, y - 4, w + 8, h + 8); }
@@ -4146,6 +4242,7 @@ function frame(t) {
   else if (inUsed()) drawUsed(t);
   else if (inRide()) drawRide(t);
   else if (inJazz()) drawJazz(t);
+  else if (inShop()) drawShop(t);
   else drawRoom(room(), t);
   if (!solo) drawLive();
   updatePet(dt); drawPet(t);
