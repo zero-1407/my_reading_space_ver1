@@ -2841,7 +2841,7 @@ $('sp-appeal').onclick = () => {
 function renderAcct() {
   const el = $('acct');
   el.textContent = account.suspended ? '🚫 이용 정지' : '🛡 경고 ' + account.warns + ' / ' + MAX_WARN;
-  el.className = 'pill' + (account.suspended || account.warns >= 2 ? ' w2' : account.warns ? ' w1' : '');
+  el.className = 'pill more' + (account.suspended || account.warns >= 2 ? ' w2' : account.warns ? ' w1' : '');
 }
 $('acct').onclick = () => {
   if (account.suspended) { suspend(); return; }
@@ -3042,7 +3042,7 @@ function refreshUI() {
           : inUsed() ? v.name + ' · 흔적 있는 책 ' + (usedStock ? usedStock.trace.length : 0) + '권'
           : v.name + ' · ' + room().bio;
   $('p-who').textContent = t; $('p-bio').textContent = s;
-  $('btn-out').textContent = inTown() ? '🗺 어디로 갈까 (M)' : '🚪 밖으로 나가기 (Q)';
+  $('btn-out').innerHTML = inTown() ? '🗺 어디로 갈까<span class="kbd"> (M)</span>' : '🚪 밖으로 나가기<span class="kbd"> (Q)</span>';
   $('btn-edit').style.display = isHome() ? 'inline-block' : 'none';
   buildLabels(); renderStats();
 }
@@ -3178,6 +3178,10 @@ $('btn-out').onclick = () => { Audio8.wake(); inTown() ? openMenu() : goOut(); }
 $('btn-edit').onclick = () => { Audio8.wake(); setEdit(!edit); };
 $('btn-search').onclick = () => { Audio8.wake(); openSearch(); };
 $('btn-menu').onclick = () => { Audio8.wake(); openMenu(); };
+$('tools-more').onclick = function () {
+  const on = $('tools').classList.toggle('more-open');
+  this.textContent = on ? '⋯ 접기' : '⋯ 더보기';
+};
 $('hudBtn').onclick = function () {
   const on = document.getElementById('stage').classList.toggle('lean');
   this.classList.toggle('on', !on);
