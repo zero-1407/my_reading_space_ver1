@@ -2488,17 +2488,33 @@ function openSearch() {
   runSearch(); setTimeout(() => qEl.focus(), 30);
   renderRealBooks(); Books.refresh();
 }
-Books.onChange(() => { if (openOv === 'search') renderRealBooks(); });
+Books.onChange(() => { autoBindAllVillages(); if (openOv === 'search') renderRealBooks(); });
 // 마을 도서관 이름은 지어낸 것이라 실제 기관과 우연히 같을 일이 거의 없다.
-// 그래서 "이 마을을 실제 어느 도서관과 연결할지"를 서버에 다 같이 보이게 저장해둔다 —
-// 한 번 연결하면, 같은 이름을 고른 다른 마을도 정확히 같은 실제 장서를 보게 된다.
-let libBindings = {};
+// 그래서 위치(성동·연수·춘천…)에 맞는 진짜 도서관을 전국에 자동으로 연결해준다 —
+// 사람이 고를 필요 없이, 실제 데이터에 그 지역 이름의 기관이 있으면 바로 붙는다.
+// 연결 정보는 서버에 다 같이 보이게 저장해서, 같은 실제 이름을 가진 마을은 똑같은 장서를 보게 된다.
+let libBindings = {}, autoBinding = false;
 async function loadLibBindings() {
   if (!Net.canConnect) return;
   try { libBindings = await Net.libBindings() || {}; if (openOv === 'search') renderRealBooks(); }
   catch (e) {}
 }
-loadLibBindings();
+async function autoBindAllVillages() {
+  if (!Net.online || autoBinding || !Books.institutions(1).length) return;
+  autoBinding = true;
+  try {
+    for (const v of VIL) {
+      if (v.country !== 'kr' || libBindings[v.key]) continue;
+      const m = Books.matchRegion(v.where);
+      if (!m) continue;
+      try { libBindings = await Net.setLibBind(v.key, m); } catch (e) {}
+    }
+  } finally { autoBinding = false; }
+  if (openOv === 'search') renderRealBooks();
+}
+loadLibBindings().then(autoBindAllVillages);
+Net.onChange(() => autoBindAllVillages());
+Books.refresh();                                        // 검색창을 열기 전에도 미리 받아둔다
 
 function renderRealBooks() {
   const cap = $('real-cap'), box = $('results-real'), v = vill();

@@ -68,6 +68,18 @@ const Books = (() => {
       if (!n) return [];
       return items.filter(x => x.instt && norm(x.instt) === n);
     },
+    // 지역 이름으로 실제 기관을 찾는다 — '서울 성동' 이면 '성동'을 먼저,
+    // 안 걸리면 '서울'로 넓혀서. 지어내지 않고, 진짜 있는 이름만 돌려준다.
+    matchRegion(where) {
+      if (!items.length || !where) return null;
+      const tokens = String(where).trim().split(/\s+/).filter(Boolean).reverse();
+      const names = this.institutions(9999);
+      for (const tok of tokens) {
+        const hit = names.find(n => n.includes(tok));
+        if (hit) return hit;
+      }
+      return null;
+    },
     // 실제로 존재하는 기관 이름들 — 매칭이 안 될 때 "이런 이름은 있어요" 힌트용
     institutions(limit) {
       const count = new Map();
