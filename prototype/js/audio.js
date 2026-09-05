@@ -8,6 +8,7 @@ const Audio8 = (() => {
   let ac = null, musicGain, sfxGain, noiseBuf, rainSrc = null;
   let musicOn = false, sfxOn = true, timer = null, bar = 0;
   let trackIdx = 0, vol = 0.5;                 // vol 0 ~ 1
+  let voices = [];                             // 지금 울리고 있는 음악 소리 — 곡 바꿀 때 바로 끊으려고
 
   const hz = m => 440 * Math.pow(2, (m - 69) / 12);
   const pick = a => a[Math.floor(Math.random() * a.length)];
@@ -64,6 +65,26 @@ const Audio8 = (() => {
     for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
   }
 
+  // 지금 울리는 음악 소리를 등록해뒀다가, 곡을 바꾸면 즉시 끊는다 (안 그러면 두 곡이 겹쳐 들린다)
+  function voice(o, e) {
+    const kill = at => {
+      try {
+        e.gain.cancelScheduledValues(at);
+        e.gain.setValueAtTime(e.gain.value, at);
+        e.gain.linearRampToValueAtTime(.0001, at + .015);
+        o.stop(at + .02);
+      } catch (err) {}
+    };
+    voices.push(kill);
+    o.addEventListener('ended', () => {
+      const i = voices.indexOf(kill);
+      if (i >= 0) voices.splice(i, 1);
+    });
+  }
+  function killVoices(at) {
+    voices.slice().forEach(k => k(at));
+    voices.length = 0;
+  }
   // 피아노 한 음 — 배음 네 개를 겹친다
   function keyNote(midi, at, dur, v) {
     const f = hz(midi);
@@ -76,6 +97,7 @@ const Audio8 = (() => {
       e.gain.exponentialRampToValueAtTime(.0001, at + dur);
       o.connect(e); e.connect(musicGain);
       o.start(at); o.stop(at + dur + .06);
+      voice(o, e);
     });
   }
   // 브러시 드럼 — 스네어를 쓸어내는 소리
@@ -88,6 +110,7 @@ const Audio8 = (() => {
     e.gain.exponentialRampToValueAtTime(.0001, at + .22);
     s.connect(f); f.connect(e); e.connect(musicGain);
     s.start(at); s.stop(at + .26);
+    voice(s, e);
   }
   function scheduleBar() {
     const T = track(), t0 = ac.currentTime + .08, i4 = bar % T.chords.length;
@@ -133,7 +156,9 @@ const Audio8 = (() => {
     musicGain._lp.frequency.setTargetAtTime(track().cut, ac.currentTime, .3);
   }
   function restart() {
-    clearInterval(timer); timer = null; stopRain(); bar = 0;
+    clearInterval(timer); timer = null;
+    if (ac) killVoices(ac.currentTime);
+    stopRain(); bar = 0;
     if (!musicOn) return;
     scheduleBar();
     timer = setInterval(scheduleBar, track().barMs);
@@ -261,6 +286,12 @@ const Audio8 = (() => {
     wake() { ensure(); },
     toggleMusic() {
       ensure(); musicOn = !musicOn; applyMusic(); restart(); return musicOn;
+    },
+    // 기본으로 음악을 켠다 — 이미 켜져 있으면 아무것도 안 한다
+    startMusic() {
+      ensure();
+      if (!musicOn) { musicOn = true; applyMusic(); restart(); }
+      return musicOn;
     },
     setTrack(i) {
       ensure(); trackIdx = Math.max(0, Math.min(TRACKS.length - 1, i));

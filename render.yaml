@@ -12,5 +12,9 @@ services:
     envVars:
       - key: KCISA_KEY         # 전시·도서 API 인증키
         sync: false            # 값은 Render 대시보드에서 직접 넣는다 (저장소에 안 올라감)
+      - key: SUPABASE_URL      # 계정·친구·방을 저장할 Supabase 프로젝트 주소
+        sync: false
+      - key: SUPABASE_SERVICE_KEY   # Supabase 프로젝트 설정 → API → service_role 키 (anon 키 아님)
+        sync: false
       - key: NODE_VERSION
         value: "20"

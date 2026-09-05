@@ -120,9 +120,9 @@ const doorOf = b => ({ x: b.x + b.w / 2 - 11, y: b.y + b.h - 4, w: 22, h: 14 });
 const mailOf = h => ({ x: h.x + h.w + 6, y: h.y + h.h - 8, w: 10, h: 16 });
 
 // ── 상태 ──────────────────────────────────────────────────────
-let place = { kind:'town', vi: 0 };
+let place = { kind:'room', idx: 0, vi: vidx(ROOMS[0].village) };
 let camX = 0, camY = 0;
-const player = { x: 230, y: 140, dir:'down', moving:false, anim:0 };
+const player = { x: DOOR.x + 4, y: 108, dir:'down', moving:false, anim:0 };
 const keys = {};
 const readKdc = new Set(), borrowed = new Set();
 let focus = null, openOv = null, edit = false, drag = null, sel = null;
@@ -558,7 +558,9 @@ function targets() {
     R.seats.forEach(([sx, sy], i) =>
       add({ type:'rideseat', i }, sx + 7, sy - 4,
           ride.seated === i ? '일어나기' : '앉아서 책 읽기', 20));
-    add({ type:'ridecrew' }, 306, 106, R.crew + '에게 말 걸기', 26);
+    // 버스는 기사님이 앞자리에 고정, 기차·비행기는 통로를 오가는 승무원
+    const crewAt = ride.mode === 'bus' ? { x:26, y:108 } : { x:306, y:106 };
+    add({ type:'ridecrew' }, crewAt.x, crewAt.y, R.crew + '에게 말 걸기', 26);
     return out;
   }
   if (inUsed()) {
@@ -846,13 +848,13 @@ function enterLibrary() {
   Audio8.play('door');
   transition(() => {
     const vi = place.vi;
+    // 이름 있는 '회원'인 척하는 대신, 방으로 이어지지 않는 익명의 안내형 인물로 둔다 —
+    // 진짜 사용자처럼 보이지 않게.
     place = { kind:'library', vi, people: [
-      { name:'민지', to:1, role:'회원', x:470, hair:'#3d2b28', shirt:'#d4818f',
+      { name:'책 읽는 사람', npc:true, x:470, hair:'#3d2b28', shirt:'#d4818f',
         lines:['문학 서가에 계속 서 있게 되네요.','800번대 밖으로 나가야 하는데 발이 안 떨어져요.'] },
-      { name:'도현', to:2, role:'회원', x:650, hair:'#2b2b33', shirt:'#5a86a8',
+      { name:'서가를 살피는 사람', npc:true, x:650, hair:'#2b2b33', shirt:'#5a86a8',
         lines:['400번대는 봐도 봐도 끝이 없어요.','이번 주는 『부분과 전체』를 붙잡고 있습니다.'] },
-      { name:'서윤', to:3, role:'회원', x:800, hair:'#4a3550', shirt:'#8a7aa8',
-        lines:['오늘은 600번대를 파보려고요.','도감 한 칸이 비어 있으면 자꾸 신경 쓰이지 않아요?'] },
     ] };
     player.x = LIB_DOOR.x + 8; player.y = 108; player.dir = 'down';
     camX = camY = 0; spawnLive(); refreshUI();
@@ -1728,8 +1730,14 @@ function drawRide(t) {
   px(0, RT - 5, RIDE_W, 5, shade(R.wall, .8));
   px(0, RT, RIDE_W, H - RT, R.floor);
   for (let y = RT; y < H; y += 7) px(0, y, RIDE_W, 1, shade(R.floor, .88));
-  px(0, RT + 2, RIDE_W, 3, shade(R.floor, 1.25));      // 통로 카펫 줄
+  // 통로 바닥 — 기차는 카펫, 비행기는 파란 통로매트, 버스는 미끄럼방지 고무판
+  const aisle = ride.mode === 'plane' ? '#5A7AA0' : ride.mode === 'bus' ? shade(R.floor, .65) : shade(R.floor, 1.25);
+  px(0, RT + 2, RIDE_W, 3, aisle);
   px(0, H - 12, RIDE_W, 3, shade(R.floor, 1.15));
+  if (ride.mode === 'plane') {                          // 안전벨트 표시등 — 깜빡인다
+    px(12, 3, 12, 7, shade(R.wall, .7));
+    px(14, 5, 8, 3, Math.sin(t / 550) > 0 ? '#E8C46A' : shade(R.wall, .55));
+  }
 
   const w = R.win;
   for (let i = 0; i < w.n; i++) {
@@ -1746,6 +1754,17 @@ function drawRide(t) {
     }
     px(x, w.y + w.h, w.w, 2, shade(R.trim, .8));
   }
+  if (ride.mode === 'plane') {                            // 머리 위 짐칸 — 비행기만
+    px(0, w.y - 8, RIDE_W, 6, shade(R.trim, .82));
+    px(0, w.y - 8, RIDE_W, 1, shade(R.trim, 1.2));
+  }
+  if (ride.mode === 'bus') {                              // 손잡이 — 버스만
+    for (let i = 0; i < 5; i++) {
+      const hx = 40 + i * 56;
+      px(hx, RT, 1, 14, shade(R.trim, .7));
+      px(hx - 2, RT + 13, 5, 2, shade(R.trim, .6));
+    }
+  }
   // 좌석
   R.seats.forEach(([sx, sy], i) => {
     const mine = ride.seated === i;
@@ -1753,17 +1772,24 @@ function drawRide(t) {
     px(sx, sy - 18, 14, 3, shade(R.seat, 1.3));
     px(sx + 2, sy - 15, 10, 12, shade(R.seat, 1.15));
     px(sx, sy + 2, 14, 3, shade(R.seat, .7));
+    if (ride.mode === 'plane') px(sx - 3, sy - 4, 3, 2, shade(R.trim, .9));  // 트레이 테이블
     if (mine) {                                          // 내가 앉아 책 읽는 중
       sprite(BODY.down.slice(0, 9), sx + 2, sy - 26, false);
       px(sx + 3, sy - 14, 8, 5, ride.read ? ride.read.col : '#D4645C');
       px(sx + 6, sy - 14, 1, 5, 'rgba(255,255,255,.4)');
     }
   });
-  // 승무원
-  const cx2 = 300 + Math.sin(t / 1400) * 22;
-  sprite(BODY.down.concat(LEG_A), cx2, 100, false, { h:'#3A3230', c:'#B85A5A' });
-  px(cx2 - 6, 112, 10, 5, '#C4B8A8');                    // 카트
-  px(cx2 - 6, 112, 10, 1, '#E0D6C8');
+  // 기사 · 승무원 — 버스는 앞자리에 고정된 기사님, 기차 · 비행기는 통로를 오가는 승무원
+  if (ride.mode === 'bus') {
+    sprite(BODY.down, 26, 100, false, { h:'#3a3230', c:'#5A6A8A' });
+    px(20, 108, 12, 10, shade(R.trim, .75));              // 운전대
+    px(23, 110, 6, 6, shade(R.trim, .5));
+  } else {
+    const cx2 = 300 + Math.sin(t / 1400) * 22;
+    sprite(BODY.down.concat(LEG_A), cx2, 100, false, { h:'#3A3230', c:'#B85A5A' });
+    px(cx2 - 6, 112, 10, 5, '#C4B8A8');                    // 카트
+    px(cx2 - 6, 112, 10, 1, '#E0D6C8');
+  }
   // 출입문
   const dOn = isF('rideout'), open = ride.t >= ride.dur;
   px(RIDE_W - 40, 14, 34, 54, shade(R.trim, .7));
@@ -1778,7 +1804,7 @@ function drawRide(t) {
 //  마이스페이스처럼 방은 누구에게나 열려 있다.
 //  친구를 맺으면 목록 위쪽에 뜨고, 아니어도 들어가 볼 수 있다.
 //  방문 자체는 아무 흔적도 남기지 않는다 — 남길지는 온 사람이 정한다.
-const friends = new Set([1]);                       // 이미 맺은 사이
+const friends = new Set();                          // 이미 맺은 사이 (오프라인 데모용 — 가짜 이웃을 없애서 비어 있다)
 const myCode = 'SEOJAE-4821';
 let visitOrder = ROOMS.map((_, i) => i).filter(i => i !== 0);   // 내가 정한 순서
 const codeOf = i => ['—','MINJI-1102','DOHYUN-0417','SEOYUN-2930','JUNHO-7715','HANEUL-3388'][i] || '';
@@ -2454,7 +2480,8 @@ function renderWall() {
     const el = document.createElement('div');
     el.className = 'ul' + (i === 0 ? ' top1' : '');
     el.innerHTML = '<div class="q">“' + u.text + '”</div>' +
-      '<div class="by"><b>' + u.who + '</b><span><button class="flag">🚩 신고</button>같이 그은 사람 ' + u.v + '명</span></div>';
+      '<div class="by"><b>' + u.who + (u.npc ? '<i class="npctag">안내</i>' : '') +
+      '</b><span><button class="flag">🚩 신고</button>같이 그은 사람 ' + u.v + '명</span></div>';
     el.querySelector('.flag').onclick = ev => {
       ev.stopPropagation();
       openReport('밑줄', u.text, u.who, () => {
@@ -2523,7 +2550,7 @@ function makeQuestion() {
 }
 function openQuiz() {
   quiz = { i:0, score:0, qs: Array.from({ length: QUIZ_N }, makeQuestion),
-           others:[{ n:'민지', s:0 }, { n:'도현', s:0 }, { n:'서윤', s:0 }] };
+           others:[{ n:'참가자1', s:0 }, { n:'참가자2', s:0 }, { n:'참가자3', s:0 }] };
   $('qz-title').textContent = vill().lib + ' 오늘의 퀴즈';
   renderQuiz(); showOv('quiz');
 }
@@ -2564,7 +2591,7 @@ function openBoard() {
     const el = document.createElement('button');
     el.className = 'post';
     el.innerHTML = '<div class="pt">' + p.title + '</div>' +
-      '<div class="pm"><span>' + p.who + '</span><span>' + p.when + '</span>' +
+      '<div class="pm"><span>' + p.who + (p.npc ? '<i class="npctag">안내</i>' : '') + '</span><span>' + p.when + '</span>' +
       '<span>공감 ' + p.likes + '</span>' +
       '<button class="flag">🚩 신고</button></div>' +
       '<div class="pp">' + p.body.split('\n')[0] + '</div>';
@@ -3981,6 +4008,10 @@ renderPocket(); renderDateTime(); applyAmbience();
 // 시작 화면 — 로그인하거나 둘러보기로 들어온 뒤에 마을이 열린다
 Net.onChange(() => { if (openOv === 'visit') renderVisit(); });
 Gate.open(() => {
+  Audio8.startMusic();
+  $('music').classList.add('on');
+  $('music').textContent = '♪ ' + Audio8.tracks[Audio8.trackIdx].name;
+  buildTrackList();
   if (Net.online) {
     if (Net.who) { ROOMS[0].who = Net.who; refreshUI(); }
     syncRoom();

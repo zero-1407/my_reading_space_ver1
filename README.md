@@ -54,10 +54,55 @@ $env:KCISA_KEY = "발급받은 인증키"
 node prototype/server.js
 ```
 
+## 계정 · 친구 · 방 저장 (Supabase)
+
+계정·친구·방 정보는 [Supabase](https://supabase.com) 무료 Postgres에 저장합니다.
+Render 무료 플랜은 디스크가 임시라서(서버가 잠들었다 깨면 초기화) 파일로 저장하면 안 됩니다.
+
+1. [supabase.com](https://supabase.com) 에서 무료 프로젝트를 하나 만듭니다.
+2. 프로젝트의 **SQL Editor** 에서 아래를 실행해 테이블을 만듭니다.
+
+   ```sql
+   create table su_users (
+     code text primary key,
+     id text unique,
+     salt text,
+     pw text,
+     token text,
+     who text,
+     created_at bigint
+   );
+   create table su_rooms (
+     code text primary key references su_users(code) on delete cascade,
+     room jsonb,
+     updated_at bigint
+   );
+   create table su_friends (
+     code text references su_users(code) on delete cascade,
+     friend text references su_users(code) on delete cascade,
+     primary key (code, friend)
+   );
+   alter table su_users enable row level security;
+   alter table su_rooms enable row level security;
+   alter table su_friends enable row level security;
+   -- 정책을 하나도 안 만들어도 됩니다 — 서버는 RLS를 건너뛰는 service_role 키로 접속합니다.
+   ```
+
+3. **Project Settings → API** 에서 `Project URL` 과 `service_role` 키(⚠️ `anon` 키가 아닙니다)를 복사합니다.
+4. Render 대시보드 환경변수에 `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` 로 넣습니다.
+
+로컬에서 켤 때도 같은 두 값을 환경변수로 넣어줘야 로그인·친구 기능이 동작합니다.
+
+```powershell
+$env:SUPABASE_URL = "https://xxxxx.supabase.co"
+$env:SUPABASE_SERVICE_KEY = "발급받은 service_role 키"
+node prototype/server.js
+```
+
 ## 배포
 
 `render.yaml` 이 들어 있어 [Render](https://render.com) 에서 Blueprint로 바로 뜹니다.
-`KCISA_KEY` 만 대시보드에서 넣어주세요.
+`KCISA_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` 를 대시보드에서 넣어주세요.
 
 ## 구조
 

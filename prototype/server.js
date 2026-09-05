@@ -235,57 +235,57 @@ async function api(req, res, u) {
   if (p === '/api/signup' && req.method === 'POST') {      // 가입
     const b = await body(req);
     try {
-      const u = store.signup(b.id, b.pw, b.who);
+      const u = await store.signup(b.id, b.pw, b.who);
       console.log('[계정] 가입 ' + u.id + ' → ' + u.code);
       return send({ ok:true, ...u });
     } catch (e) { res.statusCode = 400; return send({ ok:false, reason:e.message }); }
   }
   if (p === '/api/login' && req.method === 'POST') {       // 로그인
     const b = await body(req);
-    try { return send({ ok:true, ...store.login(b.id, b.pw) }); }
+    try { return send({ ok:true, ...await store.login(b.id, b.pw) }); }
     catch (e) { res.statusCode = 401; return send({ ok:false, reason:e.message }); }
   }
   if (p === '/api/me' && req.method === 'POST') {          // 열쇠가 아직 쓸모 있나
     const b = await body(req);
-    if (b.code && b.token && store.auth(b.code, b.token))
-      return send({ ok:true, ...store.whoAmI(b.code), token:b.token, known:true });
+    if (b.code && b.token && await store.auth(b.code, b.token))
+      return send({ ok:true, ...await store.whoAmI(b.code), token:b.token, known:true });
     if (b.guest) {                                        // 로그인 없이 둘러보기
-      const u = store.create(b.who);
+      const u = await store.create(b.who);
       return send({ ok:true, ...u, guest:true, known:false });
     }
     res.statusCode = 401; return send({ ok:false, reason:'다시 로그인해 주세요' });
   }
   if (p === '/api/rename' && req.method === 'POST') {
     const b = await body(req);
-    if (!store.auth(b.code, b.token)) { res.statusCode = 403; return send({ ok:false, reason:'권한 없음' }); }
-    store.rename(b.code, b.who);
-    return send({ ok:true, ...store.whoAmI(b.code) });
+    if (!await store.auth(b.code, b.token)) { res.statusCode = 403; return send({ ok:false, reason:'권한 없음' }); }
+    await store.rename(b.code, b.who);
+    return send({ ok:true, ...await store.whoAmI(b.code) });
   }
   if (p === '/api/room' && req.method === 'PUT') {         // 내 방 저장
     const b = await body(req);
-    if (!store.auth(b.code, b.token)) { res.statusCode = 403; return send({ ok:false, reason:'권한 없음' }); }
-    store.putRoom(b.code, b.room || {});
+    if (!await store.auth(b.code, b.token)) { res.statusCode = 403; return send({ ok:false, reason:'권한 없음' }); }
+    await store.putRoom(b.code, b.room || {});
     return send({ ok:true });
   }
   let m = p.match(/^\/api\/room\/([\w-]+)$/);              // 남의 방 구경
   if (m && req.method === 'GET') {
-    const r = store.getRoom(m[1]);
+    const r = await store.getRoom(m[1]);
     if (!r) { res.statusCode = 404; return send({ ok:false, reason:'그런 방이 없어요' }); }
     const { code, ...rest } = r;
     return send({ ok:true, room:{ ...rest, code } });
   }
   if (p === '/api/friend' && req.method === 'POST') {      // 친구 맺기
     const b = await body(req);
-    if (!store.auth(b.code, b.token)) { res.statusCode = 403; return send({ ok:false, reason:'권한 없음' }); }
-    if (!store.exists(b.friend)) { res.statusCode = 404; return send({ ok:false, reason:'그런 코드는 없어요' }); }
-    store.addFriend(b.code, b.friend);
-    return send({ ok:true, friends: store.friendsOf(b.code) });
+    if (!await store.auth(b.code, b.token)) { res.statusCode = 403; return send({ ok:false, reason:'권한 없음' }); }
+    if (!await store.exists(b.friend)) { res.statusCode = 404; return send({ ok:false, reason:'그런 코드는 없어요' }); }
+    await store.addFriend(b.code, b.friend);
+    return send({ ok:true, friends: await store.friendsOf(b.code) });
   }
   m = p.match(/^\/api\/friends\/([\w-]+)$/);
-  if (m && req.method === 'GET') return send({ ok:true, friends: store.friendsOf(m[1]) });
+  if (m && req.method === 'GET') return send({ ok:true, friends: await store.friendsOf(m[1]) });
 
   if (p === '/api/people' && req.method === 'GET')         // 열려 있는 방들
-    return send({ ok:true, people: store.recent(40), stats: store.stats() });
+    return send({ ok:true, people: await store.recent(40), stats: await store.stats() });
 
   res.statusCode = 404; send({ ok:false, reason:'없는 주소' });
 }
