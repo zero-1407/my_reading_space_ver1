@@ -127,6 +127,19 @@ module.exports = {
     return r ? r.room : null;
   },
 
+  // 편지 보내기 — 방을 통째로 받아 letters 만 고쳐서 다시 쓴다 (leaveTrace 와 같은 방식)
+  async sendLetter(code, letter) {
+    const row = one(await sb('/su_rooms?code=eq.' + enc(code) + '&select=room'));
+    const room = (row && row.room) || {};
+    room.letters = room.letters || [];
+    room.letters.unshift(letter);
+    if (room.letters.length > 30) room.letters.length = 30;
+    await sb('/su_rooms?on_conflict=code', {
+      method: 'POST', headers: Object.assign({}, H, { Prefer: 'resolution=merge-duplicates' }),
+      body: JSON.stringify({ code, room, updated_at: Date.now() }),
+    });
+  },
+
   // 남의 책에 흔적(쪽지·책갈피) 남기기 — 방을 통째로 받아 그 책만 고쳐서 다시 쓴다.
   // 동시에 두 사람이 같은 방에 흔적을 남기면 나중에 쓴 쪽이 이길 수 있다 — 이 규모에선 괜찮다.
   async leaveTrace(code, shelfIndex, bookTitle, kind, entry) {

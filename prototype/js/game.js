@@ -2460,9 +2460,10 @@ $('b-drop').onclick = () => {
 $('b-lines').onclick = () => openLines(activeBook);
 
 // ── 문장 선물 ─────────────────────────────────────────────────
-let giftTo = 1, giftFromMail = false;
+//  참새(편지)는 이제 실제 친구에게 간다 — 그 친구의 서버 우편함에 진짜로 쌓인다.
+let giftTo = null, giftFromMail = false, giftFriends = [];
 $('b-gift').onclick = () => { giftFromMail = false; letterMode = false; openGift(activeBook); };
-function openGift(bk) {
+async function openGift(bk) {
   activeBook = bk;
   const pk = $('g-pick');
   $('g-book').textContent = letterMode ? '✉️ 책 없이 보내는 편지예요'
@@ -2483,29 +2484,39 @@ function openGift(bk) {
   } else pk.style.display = 'none';
 
   $('g-text').value = activeBook.note;
-  sparrowHint();
-  const fl = $('g-friends'); fl.innerHTML = '';
-  ROOMS.forEach((r, i) => {
-    if (i === 0) return;
+  const fl = $('g-friends'); fl.innerHTML = '<div class="none">불러오는 중…</div>';
+  showOv('gift');
+  try { giftFriends = Net.online ? await Net.friends() : []; }
+  catch (e) { giftFriends = []; }
+  if (!giftFriends.some(f => f.code === giftTo)) giftTo = giftFriends[0] ? giftFriends[0].code : null;
+  fl.innerHTML = '';
+  if (!giftFriends.length) {
+    fl.innerHTML = '<div class="none">' + (Net.online
+      ? '아직 친구가 없어요 · 손님 문에서 코드를 주고받아 친구를 맺어보세요'
+      : '로그인해야 친구에게 보낼 수 있어요') + '</div>';
+  }
+  giftFriends.forEach(f => {
     const el = document.createElement('button');
-    el.className = 'fr' + (i === giftTo ? ' sel' : '');
-    const vi2 = vidx(r.village);
-    el.innerHTML = '<div class="n">' + r.who + '</div><div class="d">' +
-      VIL[vi2].where + ' · ' + kmBetween(place.vi, vi2) + 'km</div>';
-    el.onclick = () => { giftTo = i; openGift(activeBook); };
+    el.className = 'fr' + (f.code === giftTo ? ' sel' : '');
+    const vi2 = f.village ? vidx(f.village) : -1, v = vi2 >= 0 ? VIL[vi2] : null;
+    el.innerHTML = '<div class="n">' + esc(f.who) + '</div><div class="d">' +
+      (v ? v.where + ' · ' + kmBetween(place.vi, vi2) + 'km' : f.code) + '</div>';
+    el.onclick = () => { giftTo = f.code; openGift(activeBook); };
     fl.appendChild(el);
   });
-  updateEta();
-  showOv('gift');
+  sparrowHint();
 }
+function currentGiftFriend() { return giftFriends.find(f => f.code === giftTo) || null; }
 function updateEta() {
-  if (!ROOMS[giftTo]) return;
-  const vi2 = vidx(ROOMS[giftTo].village), km = kmBetween(place.vi, vi2);
+  const f = currentGiftFriend();
+  if (!f) { $('g-eta').innerHTML = ''; return; }
+  const vi2 = f.village ? vidx(f.village) : -1;
+  const km = vi2 >= 0 ? kmBetween(place.vi, vi2) : 300;
   const c = carrierFor(($('g-text').value || '').trim().length);
   const min = Math.round(flightMinutes(km) * c.mult);
   $('g-eta').innerHTML = c.emo + ' <b>' + c.name + '</b>이(가) 시속 ' +
-    Math.round(BIRD_KMH / c.mult) + 'km 로 날아갑니다.<br>여기서 ' + VIL[vi2].where +
-    '까지 <b>' + km + 'km</b> — 도착까지 <b>' + fmtMin(min) + '</b>' +
+    Math.round(BIRD_KMH / c.mult) + 'km 로 날아갑니다.<br>' + esc(f.who) + '님까지 <b>' + km + 'km</b>' +
+    ' — 도착까지 <b>' + fmtMin(min) + '</b>' +
     '<div class="demo">데모에서는 ' + Math.round(demoMs(km) * c.mult / 1000) + '초로 압축됩니다</div>';
 }
 // 배달부 — 편지가 길어지면 더 큰 새가 대신 물고 간다. 막지는 않는다.
@@ -2538,16 +2549,23 @@ function sparrowHint() {
   updateEta();
 }
 $('g-text').addEventListener('input', sparrowHint);
-$('g-send').onclick = () => {
+$('g-send').onclick = async () => {
   const text = $('g-text').value.trim();
   if (!text) { toast('보낼 문장을 적어주세요'); return; }
-  const vi2 = vidx(ROOMS[giftTo].village), km = kmBetween(place.vi, vi2), now = performance.now();
+  const f = currentGiftFriend();
+  if (!f) { toast('보낼 친구를 골라주세요'); return; }
+  const vi2 = f.village ? vidx(f.village) : -1;
+  const km = vi2 >= 0 ? kmBetween(place.vi, vi2) : 300, now = performance.now();
   const c = carrierFor(text.length), min = Math.round(flightMinutes(km) * c.mult);
-  flights.push({ toIdx: giftTo, book: letterMode ? null : activeBook.t, text, sentAt: now,
+  const book = letterMode ? null : activeBook.t;
+  try {
+    await Net.sendMail(f.code, book, text);
+  } catch (e) { toast('보내지 못했어요 — ' + e.message); return; }
+  flights.push({ toWho: f.who, book, text, sentAt: now,
                  arriveAt: now + demoMs(km) * c.mult, km, min, carrier: c });
   flyFx.push({ x: player.x, y: player.y - 4, t: 0, big: c.mult >= 1.4 });
   Audio8.play('wing'); closeOv();
-  toast(c.emo + ' ' + c.name + '이(가) ' + ROOMS[giftTo].who + '에게 떠났어요 · ' + fmtMin(min) + ' 걸립니다');
+  toast(c.emo + ' ' + c.name + '이(가) ' + f.who + '에게 떠났어요 · ' + fmtMin(min) + ' 걸립니다');
 };
 
 // ── 우체국 ────────────────────────────────────────────────────
@@ -3214,7 +3232,7 @@ function renderFlights(now) {
   for (const f of flights) {
     const p = Math.min(1, (now - f.sentAt) / (f.arriveAt - f.sentAt));
     const d = document.createElement('div'); d.className = 'flight';
-    d.innerHTML = (f.carrier ? f.carrier.emo : '🕊') + ' <span class="to">' + ROOMS[f.toIdx].who + '</span>' +
+    d.innerHTML = (f.carrier ? f.carrier.emo : '🕊') + ' <span class="to">' + esc(f.toWho) + '</span>' +
       '<span class="bar"><i style="width:' + (p * 100).toFixed(0) + '%"></i></span>' +
       '<span class="eta">' + fmtMin(Math.max(0, Math.round(f.min * (1 - p)))) + ' 남음</span>';
     el.appendChild(d);
@@ -4332,9 +4350,9 @@ function frame(t) {
   for (let i = flights.length - 1; i >= 0; i--) {
     if (t >= flights[i].arriveAt) {
       const f = flights.splice(i, 1)[0];
-      ROOMS[f.toIdx].letters.unshift({ from:'나', book:f.book, text:f.text, read:false });
+      // 실제 배달은 보낼 때 이미 서버로 끝났다 — 여기서는 내 화면에서만 도착 연출을 마무리한다
       Audio8.play('mail');
-      toast('🕊 ' + ROOMS[f.toIdx].who + '의 우편함에 문장이 도착했어요');
+      toast('🕊 ' + f.toWho + '에게 문장이 도착했어요');
     }
   }
   renderFlights(t);
@@ -4428,6 +4446,9 @@ Gate.open(async () => {
             hair: s.hair || ROOMS[0].hair, shirt: s.shirt || ROOMS[0].shirt,
           });
           if (s.items && s.items.length) ROOMS[0].items = s.items.map(it => Object.assign({ id: uid++ }, it));
+          // 친구가 보낸 편지 — snapshot()/syncRoom() 은 letters 를 건드리지 않는다.
+          // 같이 왕복시키면, 내가 온라인인 동안 딴 데서 온 편지를 내 예전 상태로 덮어써 지울 수 있어서다.
+          if (s.letters && s.letters.length) ROOMS[0].letters = s.letters;
           // 필사대(journal)는 나중에 추가된 기본 가구라, 예전에 저장해둔 방에는 없다 — 없으면 넣어준다
           if (!ROOMS[0].items.some(it => it.kind === 'journal'))
             ROOMS[0].items.push({ id: uid++, kind:'journal', x:326, y:18, w:26, h:32 });

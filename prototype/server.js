@@ -315,6 +315,22 @@ async function api(req, res, u) {
     } catch (e) { res.statusCode = 404; return send({ ok:false, reason: e.message }); }
   }
 
+  // 편지 · 참새로 보내는 문장 — 실제 친구의 우편함에 진짜로 쌓인다
+  if (p === '/api/mail' && req.method === 'POST') {
+    const b = await body(req);
+    if (!await store.auth(b.code, b.token)) { res.statusCode = 403; return send({ ok:false, reason:'권한 없음' }); }
+    if (!b.target || b.target === b.code) { res.statusCode = 400; return send({ ok:false, reason:'대상이 이상해요' }); }
+    if (!await store.exists(b.target)) { res.statusCode = 404; return send({ ok:false, reason:'그런 코드는 없어요' }); }
+    const text = String(b.text || '').trim().slice(0, 500);
+    if (!text) { res.statusCode = 400; return send({ ok:false, reason:'내용이 비어 있어요' }); }
+    if (BLOCK.some(w => text.includes(w))) { res.statusCode = 400; return send({ ok:false, reason:'남을 깎아내리는 표현이 들어 있어요' }); }
+    const who = await store.whoAmI(b.code);
+    const letter = { from: (who && who.who) || '누군가', book: b.book ? String(b.book).slice(0, 80) : null,
+                      text, read:false, at: Date.now() };
+    await store.sendLetter(b.target, letter);
+    return send({ ok:true });
+  }
+
   // 마을 도서관 ↔ 실제 기관 연결 — 누구나 보고, 로그인한 사람만 바꿀 수 있다
   if (p === '/api/libbind' && req.method === 'GET')
     return send({ ok:true, bindings: await store.libBindings() });
@@ -367,7 +383,7 @@ function pruneJazz() {
 http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://localhost');
 
-  if (/^\/api\/(me|signup|login|rename|room|friend|friends|people|jazz|libbind|trace)(\/|$)/.test(u.pathname)) {
+  if (/^\/api\/(me|signup|login|rename|room|friend|friends|people|jazz|libbind|trace|mail)(\/|$)/.test(u.pathname)) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,OPTIONS');
