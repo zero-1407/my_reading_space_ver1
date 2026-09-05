@@ -111,11 +111,15 @@ function blob(cx, cy, r, c) {
     if (hw >= 0) px(cx - hw, cy + dy, hw * 2 + 1, 1, c);
   }
 }
-// 꽃송이 — 겹친 덩어리 두세 개 + 중심 악센트로, 네모난 꽃잎 블록 대신 둥글게
+// 꽃송이 — 동그라미 하나면 그냥 공이다. 꽃잎 5장을 돌려 붙여야 꽃이 된다
 function bloom(cx, cy, r, c) {
-  blob(cx, cy, r, c);
-  blob(cx - Math.round(r * .35), cy - Math.round(r * .35), Math.max(1, r - 1), shade(c, 1.3));
-  blob(cx, cy, 1, shade(c, .55));
+  const pr = Math.max(1, Math.round(r * .58)), orbit = r * .62;
+  for (let i = 0; i < 5; i++) {
+    const a = (Math.PI * 2 * i) / 5 - Math.PI / 2;
+    blob(Math.round(cx + Math.cos(a) * orbit), Math.round(cy + Math.sin(a) * orbit * .9), pr, c);
+  }
+  blob(Math.round(cx - orbit * .3), Math.round(cy - orbit * .3), Math.max(1, pr - 1), shade(c, 1.35));
+  blob(cx, cy, Math.max(1, Math.round(r * .4)), shade(c, .55));
 }
 // 살짝 좁아지는 화분 — 사다리꼴이라 사각 블록보다 도자기 같다
 function potShape(x, y, w, h, c) {
@@ -209,11 +213,12 @@ const SHOPS = {
         { x:90, y:97, w:16, h:8,  pc:'#A85C46', fc:'#C98A7C', lh:10, tilt:1 },
       ];
       pots.forEach(p => {
+        px(p.x - 1, p.y + p.h, p.w + 2, 2, 'rgba(60,42,24,.16)');          // 바닥에 닿는 그림자 — 붕 뜬 느낌 없애기
         potShape(p.x, p.y, p.w, p.h, p.pc);
         const cx = Math.round(p.x + p.w / 2 + p.tilt), top = p.y - p.lh;
         px(cx, top + 2, 2, p.lh - 2, '#5F7A4A');                           // 줄기
         blob(cx - 4, top + 8, 2, '#7C8F5A'); blob(cx + 4, top + 5, 2, '#8A9A6E'); // 둥근 잎 두 덩이
-        if (p.fc) bloom(cx, top, 4, p.fc);                                 // 꽃송이
+        if (p.fc) bloom(cx, top, 5, p.fc);                                 // 꽃송이 — 꽃잎 5장
       });
       // 유리 진열장 — 꽃다발이 가득, 뒤섞인 채로 (일렬로 꽂아둔 게 아니라 한 아름 안긴 느낌)
       const gx = 118, gy = 40, gw = 96, gh = 46;
