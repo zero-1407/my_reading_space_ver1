@@ -48,7 +48,7 @@ const ROOM_W = 380;                                     // 방을 옆으로 넓�
 const DOOR = { x: 214, y: 18, w: 34, h: 52 };           // 밖으로 나가는 문
 // 손님 문 — 이 문 하나로 어디든 간다. 친구가 몇이든 벽이 안 무너진다.
 const VDOOR = { x: 272, y: 16, w: 38, h: 54 };
-const LIB_W = 960, LIB_DOOR = { x: 14, y: 18, w: 34, h: 52 };
+const LIB_W = 1040, LIB_DOOR = { x: 14, y: 18, w: 34, h: 52 };
 const LIB_DESK  = { x: 62,  y: 88, w: 52, h: 20 };
 const LIB_RANK  = { x: 132, y: 16, w: 56, h: 34 };
 const LIB_BOARD = { x: 204, y: 14, w: 64, h: 40 };
@@ -56,6 +56,11 @@ const LIB_QUIZ  = { x: 290, y: 94, w: 56, h: 22 };
 const LIB_NEWS  = { x: 186, y: 92, w: 64, h: 24 };   // 신문대 — 신문 걸이와 읽는 자리
 const STACK_X0 = 370, STACK_W = 48, STACK_GAP = 8;
 const stackX = i => STACK_X0 + i * (STACK_W + STACK_GAP);
+const LIB_STAIRS = { x: 960, y: 14, w: 46, h: 58 };  // 2층으로 — 두 층이 같은 자리에 있다
+// 도서관 2층 — 조용한 열람실
+const LIB2_NOOK = [{ x:120, y:96 }, { x:180, y:96 }, { x:520, y:96 }, { x:580, y:96 }];
+const LIB2_RARE = { x:760, y:14, w:100, h:56 };
+let nookSeated = false, nookRead = null;
 
 // 헌책방 안 — 도서관보다 좁고 어수선하다
 const USED_W = 490;
@@ -702,8 +707,16 @@ function targets() {
     add({ type:'cat' }, CAT.x + 5, CAT.y + 10, '고양이', 16);
     return out;
   }
+  if (inLib() && place.floor === 2) {
+    addX({ type:'stairdown' }, LIB_STAIRS.x + LIB_STAIRS.w / 2, 30, '1층으로 내려가기', 10, 60);
+    LIB2_NOOK.forEach((s, i) => add({ type:'nook', i }, s.x + 7, s.y - 4,
+      nookSeated === i ? '일어나기' : '앉아서 책 읽기', 20));
+    add({ type:'rare' }, LIB2_RARE.x + LIB2_RARE.w / 2, LIB2_RARE.y + 30, '고서 서가 살펴보기', 30);
+    return out;
+  }
   if (inLib()) {
     addX({ type:'exit' }, LIB_DOOR.x + 17, 22, '도서관에서 나가기', 8, 66);
+    addX({ type:'stairup' }, LIB_STAIRS.x + LIB_STAIRS.w / 2, 30, '2층으로 올라가기', 10, 60);
     addX({ type:'rank' }, LIB_RANK.x + 28, 34, '명예의 전당', 10, 50);
     addX({ type:'board' }, LIB_BOARD.x + 32, 38, '마을 글판 읽기', 8, 52);
     for (let i = 0; i < 10; i++)
@@ -918,6 +931,13 @@ const ACTIONS = {
   rank:    openRank,
   board:   openBoard,
   quiz:    openQuiz,
+  stairup:   () => libClimb('up'),
+  stairdown: () => libClimb('down'),
+  nook:    f => sitNook(f.i),
+  rare:    () => say('고서 서가', ['유리 너머로만 보이는 칸이에요.',
+             '오래된 판본들이라, 손대지 말고 눈으로만 봐 달래요.',
+             '표지 색이 다 바래서 제목이 잘 안 보이는 것도 있어요.'],
+             [{ label:'가만히 들여다본다' }]),
   npc:     f => talkNpc(npcs[f.i]),
   npc2:    f => talkNpc(place.people[f.i]),
   stack:   f => openStack(f.i),
@@ -979,7 +999,7 @@ function enterLibrary() {
     const vi = place.vi;
     // 이름 있는 '회원'인 척하는 대신, 방으로 이어지지 않는 익명의 안내형 인물로 둔다 —
     // 진짜 사용자처럼 보이지 않게.
-    place = { kind:'library', vi, people: [
+    place = { kind:'library', vi, floor:1, people: [
       { name:'책 읽는 사람', npc:true, x:470, hair:'#3d2b28', shirt:'#d4818f',
         lines:['문학 서가에 계속 서 있게 되네요.','800번대 밖으로 나가야 하는데 발이 안 떨어져요.'] },
       { name:'서가를 살피는 사람', npc:true, x:650, hair:'#2b2b33', shirt:'#5a86a8',
@@ -988,6 +1008,26 @@ function enterLibrary() {
     player.x = LIB_DOOR.x + 8; player.y = 108; player.dir = 'down';
     camX = camY = 0; spawnLive(); refreshUI();
   });
+}
+// 도서관 층 오르내리기 — 계단 자리는 두 층이 똑같다
+function libClimb(dir) {
+  Audio8.play('page');
+  transition(() => {
+    place.floor = dir === 'up' ? 2 : 1;
+    player.x = LIB_STAIRS.x + 6; player.y = 108; player.dir = 'down';
+    camX = camY = 0; refreshUI();
+  });
+}
+// 2층 열람실 안락의자 — 조용히 앉아 책을 편다
+function sitNook(i) {
+  if (nookSeated === i) { nookSeated = false; nookRead = null; toast('일어났어요'); return; }
+  const mine = allBooks(ROOMS[0]);
+  if (!mine.length) { nookSeated = i; toast('앉았어요 · 읽을 책이 없네요'); return; }
+  say('무슨 책을 펼칠까요', ['조용한 데라 책장 넘기는 소리만 들려요.'],
+    mine.slice(0, 6).map(b2 => ({ label:'📕 ' + b2.t, fn: () => {
+      nookSeated = i; nookRead = b2; Audio8.play('page');
+      toast('『' + b2.t + '』를 펼쳤어요 · 여기가 제일 조용해요');
+    } })).concat([{ label:'그냥 앉기', fn: () => { nookSeated = i; } }]));
 }
 function goOut() {
   if (inTown()) { openMenu(); return; }
@@ -3196,7 +3236,7 @@ function refreshUI() {
   const t = inRide() ? RIDES[ride.mode].name + ' 안'
           : inJazz() ? '재즈바 한밤'
           : inShop() ? SHOPS[place.key].title
-          : inTown() ? v.name : inLib() ? v.lib : inUsed() ? '헌책방'
+          : inTown() ? v.name : inLib() ? v.lib + (place.floor === 2 ? ' · 2층' : '') : inUsed() ? '헌책방'
           : isHome() ? '내 방' : room().who + '의 방';
   const s = inJazz() ? (Net.online
             ? '실시간 ' + ((jazz.live ? jazz.live.length : 0) + 1) + ' / ' + (jazz.cap || JAZZ_CAP_FALLBACK) + '명 · 🟢 이름표가 진짜 회원이에요'
@@ -3204,7 +3244,7 @@ function refreshUI() {
           : inShop()  ? v.name + ' · ' + SHOPS[place.key].deskLabel
           : inRide() ? VIL[ride.to].name + ' 로 가는 중'
           : inTown() ? v.where + ' · ' + v.theme + ' · 회원 ' + v.members + '명'
-          : inLib()  ? '장서 ' + v.books + ' · 서가 열 칸'
+          : inLib()  ? (place.floor === 2 ? '조용한 열람실 · 고서 서가가 있어요' : '장서 ' + v.books + ' · 서가 열 칸')
           : inUsed() ? v.name + ' · 흔적 있는 책 ' + (usedStock ? usedStock.trace.length : 0) + '권'
           : v.name + ' · ' + room().bio;
   $('p-who').textContent = t; $('p-bio').textContent = s;
@@ -3258,6 +3298,10 @@ function buildLabels() {
     LABELS.push({ t:'버스정류장', x: BUS.x + BUS.w / 2, y: BUS.y - 22 });
     LABELS.push({ t: v.lmName, x: LM.x, y: LM.y - 74, c:'soft' });
     town().houses.forEach(h => LABELS.push({ t: h.name, x: h.x + h.w / 2, y: h.y - 18, c: h.to === 0 ? 'mine' : '' }));
+  } else if (inLib() && place.floor === 2) {
+    LABELS.push({ t:'1층으로', x: LIB_STAIRS.x + LIB_STAIRS.w / 2, y: LIB_STAIRS.y - 4 });
+    LABELS.push({ t:'고서 서가', x: LIB2_RARE.x + LIB2_RARE.w / 2, y: LIB2_RARE.y - 4, c:'shelf' });
+    LABELS.push({ t:'열람실', x: LIB2_NOOK[0].x, y: 78, c:'soft' });
   } else if (inLib()) {
     for (let i = 0; i < 10; i++)
       LABELS.push({ t: KDC[i][1], x: stackX(i) + STACK_W / 2, y: 72, c:'shelf' });
@@ -3266,6 +3310,7 @@ function buildLabels() {
     LABELS.push({ t:'마을 글판', x: LIB_BOARD.x + 32, y: 10 });
     LABELS.push({ t:'신문대', x: LIB_NEWS.x + 32, y: 84 });
     LABELS.push({ t:'퀴즈 자리', x: LIB_QUIZ.x + 28, y: 88 });
+    LABELS.push({ t:'2층으로', x: LIB_STAIRS.x + LIB_STAIRS.w / 2, y: LIB_STAIRS.y - 4 });
   } else if (inUsed()) {
     LABELS.push({ t:'흔적 있는 책', x: USED_TRACE.x + 59, y: USED_TRACE.y + 68, c:'shelf' });
     LABELS.push({ t:'균일가', x: USED_FLAT.x + 54, y: USED_FLAT.y + 64, c:'shelf' });
@@ -4125,10 +4170,22 @@ function plaque(x, y, w, h, base, on, t, rows) {
   rows(x, y, w, h);
   if (on) arrow(x + w / 2 - 1, y - 9, t);
 }
+function drawStairs(R, up, t) {
+  // up: 1층에서 위로 올라가는 계단(어두운 통로) / false면 2층에서 아래로 내려가는 계단(빛이 샘)
+  const S = LIB_STAIRS, on = isF(up ? 'stairup' : 'stairdown');
+  if (on) { ctx.fillStyle = GLOW; ctx.fillRect(S.x - 5, S.y - 5, S.w + 10, S.h + 14); }
+  px(S.x - 2, S.y - 2, S.w + 4, S.h + 4, shade(R.wood, .6));
+  px(S.x, S.y, S.w, S.h, up ? '#2E2638' : '#EFE0B8');
+  for (let i = 0; i < 6; i++) px(S.x + 3, S.y + 6 + i * 8, S.w - 6, 3, shade(R.wood, up ? .5 : 1.15));
+  px(S.x + S.w / 2 - 10, S.y + S.h + 2, 20, 6, '#FBF3E2');
+  if (on) arrow(S.x + S.w / 2 - 1, S.y - 8, t);
+}
 function drawLibrary(t) {
+  if (place.floor === 2) { drawLibrary2(t); return; }
   const R = LIB_SKIN, woodDark = shade(R.wood, .66);
   shellRoom(R, LIB_W);
   drawDoorIndoor(R.wood, LIB_DOOR, isF('exit'), t);
+  drawStairs(R, true, t);
 
   const dOn = isF('desk');
   if (dOn) { ctx.fillStyle = GLOW; ctx.fillRect(LIB_DESK.x - 4, LIB_DESK.y - 16, LIB_DESK.w + 8, LIB_DESK.h + 18); }
@@ -4226,6 +4283,44 @@ function drawLibrary(t) {
     const bob = Math.sin(t / 700 + i * 2) > .6 ? 1 : 0;
     sprite(BODY.up.concat(LEG_A), p.x, 113 - bob, false, { h:p.hair, c:p.shirt });
     if (on) arrow(p.x + 4, 104, t);
+  });
+}
+// 도서관 2층 — 조용한 열람실
+function drawLibrary2(t) {
+  const R = LIB_SKIN, woodDark = shade(R.wood, .66);
+  shellRoom(R, LIB_W);
+  drawStairs(R, false, t);
+
+  shopWindow(90, 12, 44, 36);
+  shopWindow(500, 12, 44, 36);
+
+  // 고서 서가 — 유리 진열장
+  const rOn = isF('rare'), RR = LIB2_RARE;
+  if (rOn) { ctx.fillStyle = GLOW; ctx.fillRect(RR.x - 5, RR.y - 4, RR.w + 10, RR.h + 12); }
+  px(RR.x - 2, RR.y - 2, RR.w + 4, RR.h + 4, woodDark);
+  px(RR.x, RR.y, RR.w, RR.h, '#DCEEF2');
+  for (let n = 0; n < 22; n++) {
+    const w = 3 + (n % 3), h = 24 + (n * 5 % 14);
+    const x2 = RR.x + 5 + n * 4.3;
+    if (x2 + w > RR.x + RR.w - 5) break;
+    px(x2, RR.y + RR.h - 8 - h, w, h, ['#7A5A44', '#8A6A44', '#6E5236', '#9A7A54'][n % 4]);
+  }
+  px(RR.x, RR.y + RR.h - 8, RR.w, 2, woodDark);
+  if (rOn) arrow(RR.x + RR.w / 2 - 1, RR.y - 8, t);
+
+  // 안락의자 — 앉으면 책을 편다
+  LIB2_NOOK.forEach((s, i) => {
+    const on = isF('nook', 'i', i), mine = nookSeated === i;
+    if (on) { ctx.fillStyle = GLOW; ctx.fillRect(s.x - 6, s.y - 24, 24, 32); }
+    px(s.x, s.y - 16, 16, 18, '#8A5A44');
+    px(s.x, s.y - 16, 16, 3, shade('#8A5A44', 1.25));
+    px(s.x - 3, s.y - 14, 3, 16, shade('#8A5A44', .85));
+    px(s.x + 16, s.y - 14, 3, 16, shade('#8A5A44', .85));
+    if (mine) {
+      sprite(BODY.down.slice(0, 9), s.x + 3, s.y - 24, false);
+      px(s.x + 4, s.y - 12, 8, 5, nookRead ? nookRead.col : '#D4645C');
+    }
+    if (on) arrow(s.x + 8, s.y - 30, t);
   });
 }
 function drawFlyFx(dt) {
