@@ -248,7 +248,7 @@ const ROOMS = [
       item({ kind:'window', x:262, y:16, w:54, h:38 }),
       item({ kind:'fireplace', x:320, y:30, w:26, h:40, lit:true }),
       item({ kind:'journal', x:354, y:18, w:26, h:32 }),
-      surface('sofa', 261, 100, 56, 26, []),
+      surface('sofa', 261, 96, 56, 30, []),
       item({ kind:'rug', x:249, y:98, w:80, h:30, round:true }),
       surface('table', 322, 104, 28, 16, []),
       item({ kind:'lamp', x:331, y:86, w:10, h:20 }),
