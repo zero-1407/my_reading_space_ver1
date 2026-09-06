@@ -912,7 +912,12 @@ const ACTIONS = {
              const stage = p.grow < 3 ? '새 잎이 하나 올라왔어요'
                          : p.grow < 6 ? '제법 잎이 무성해졌어요' : '꽃대가 올라오고 있어요';
              say('화분', ['물을 주었습니다.', stage + ' (' + p.grow + '일째)'],
-               [{ label:'잘 자라라' }]); },
+               [{ label:'잘 자라라' },
+                { label:'치우기', fn: () => {
+                    const R = ROOMS[0], i = R.items.indexOf(p);
+                    if (i >= 0) R.items.splice(i, 1);
+                    Audio8.play('page'); toast('화분을 치웠어요');
+                  } }]); },
   furn:    () => enterShop('furn'),
   museum:  () => enterShop('museum'),
   shopdesk:() => SHOPS[place.key].action(),
