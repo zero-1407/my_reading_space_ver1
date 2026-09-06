@@ -85,6 +85,11 @@ const SHOP_STAIRS = { x:280, y:14, w:32, h:50 };     // 찻집만 여기로 루�
 const ROOF_TABLES = [{ x:80, y:96 }, { x:220, y:96 }];
 // 창 하나, 러그 하나는 다섯 가게가 다 같이 쓴다 (drawItem 의 window·rug 와 같은 그림)
 function shopWindow(x, y, w, h) {
+  // 창으로 볕이 들어와 바닥에 퍼지는 은은한 빛 웅덩이 — 평평한 실내를 살려준다
+  const cx = x + w / 2, cy = y + h;
+  const glow = ctx.createRadialGradient(cx, cy, 2, cx, cy, w * 1.15);
+  glow.addColorStop(0, 'rgba(255,244,206,.26)'); glow.addColorStop(1, 'rgba(255,244,206,0)');
+  ctx.fillStyle = glow; ctx.fillRect(cx - w * 1.15, cy - 6, w * 2.3, H - cy + 6);
   px(x, y, w, h, '#6E5236');
   px(x + 3, y + 3, w - 6, h - 6, '#DCF0FA');
   px(x + 3, y + h * .58, w - 6, h * .5 - 3, '#B2DCF0');
@@ -4094,7 +4099,10 @@ function shellRoom(R, wide) {
   const ww = wide || ROOM_W;
   const wallLine = shade(R.wall, 1.08), wallDark = shade(R.wall, .82);
   const floorAlt = shade(R.floor, .93), floorLine = shade(R.floor, .8);
-  px(0, 0, ww, RT, R.wall);
+  // 벽 — 평평한 단색 대신 그라데이션으로 공간감을 준다 (천장 쪽 살짝 어둡게, 가운데 살짝 밝게)
+  const wg = ctx.createLinearGradient(0, 0, 0, RT);
+  wg.addColorStop(0, shade(R.wall, .88)); wg.addColorStop(.5, shade(R.wall, 1.05)); wg.addColorStop(1, shade(R.wall, .9));
+  ctx.fillStyle = wg; ctx.fillRect(0, 0, ww, RT);
   ctx.fillStyle = wallLine;
   for (let x = 0; x < ww; x += 8) ctx.fillRect(x, 0, 1, RT);
   px(0, RT - 4, ww, 4, wallDark);
@@ -4102,6 +4110,10 @@ function shellRoom(R, wide) {
     px(0, y, ww, 6, ((y / 6) | 0) % 2 ? floorAlt : R.floor);
     px(0, y, ww, 1, floorLine);
   }
+  // 바닥에도 은은한 명암 — 문 쪽(위)은 살짝 그늘지고 안쪽(아래)은 따뜻하게 뜬다
+  const fg = ctx.createLinearGradient(0, RT, 0, H);
+  fg.addColorStop(0, 'rgba(40,30,20,.1)'); fg.addColorStop(.55, 'rgba(0,0,0,0)'); fg.addColorStop(1, 'rgba(255,240,210,.07)');
+  ctx.fillStyle = fg; ctx.fillRect(0, RT, ww, H - RT);
 }
 function drawBookSpine(bk) {
   px(bk.bx, bk.by, bk.w, bk.h, bk.col);
