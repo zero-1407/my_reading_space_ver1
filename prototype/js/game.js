@@ -4623,6 +4623,13 @@ function drawLibrary(t) {
     sprite(BODY.up.concat(LEG_A), p.x, 113 - bob, false, { h:p.hair, c:p.shirt });
     if (on) arrow(p.x + 4, 104, t);
   });
+  // 천장 매단 등 두 개 — 앞쪽과 계단 앞, 서가가 빽빽한 자리는 피해서
+  [195, 935].forEach(x => { px(x, 4, 2, 11, '#6E5238'); blob(x + 1, 17, 5, '#F0DFA0'); blob(x, 14, 2, '#FBF3E2'); });
+  // 바닥 화분 — 서가 사이사이에 온기를 놓는다 (서가는 벽 쪽 위에만 있어서 바닥은 늘 비어 있다)
+  [[350, 122], [560, 122], [780, 122]].forEach(([x, y]) => {
+    px(x - 1, y + 10, 14, 2, 'rgba(60,42,24,.15)');
+    potShape(x, y, 12, 10, '#7A6248'); blob(x + 6, y - 8, 5, '#7C9A6E'); blob(x + 3, y - 12, 3, '#8AAE7A');
+  });
 }
 // 도서관 2층 — 조용한 열람실
 function drawLibrary2(t) {
@@ -4660,6 +4667,11 @@ function drawLibrary2(t) {
       px(s.x + 4, s.y - 12, 8, 5, nookRead ? nookRead.col : '#D4645C');
     }
     if (on) arrow(s.x + 8, s.y - 30, t);
+  });
+  // 안락의자 사이 빈 자리에 화분 — 열람실이 더 아늑해 보이게
+  [[340, 108], [700, 108]].forEach(([x, y]) => {
+    px(x - 1, y + 10, 14, 2, 'rgba(60,42,24,.15)');
+    potShape(x, y, 12, 10, '#7A6248'); blob(x + 6, y - 8, 5, '#7C9A6E'); blob(x + 3, y - 12, 3, '#8AAE7A');
   });
 }
 function drawFlyFx(dt) {
