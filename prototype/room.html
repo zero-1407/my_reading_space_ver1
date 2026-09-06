@@ -579,6 +579,19 @@
   .res .k { margin-left:auto; font-size:10px; color:var(--violet); background:var(--violet-bg);
             padding:3px 7px; border-radius:4px; flex-shrink:0; white-space:nowrap; }
   .res.have { opacity:.45; cursor:default; }
+  .res .wish { margin-left:8px; font-size:14px; background:none; border:none; cursor:pointer;
+               opacity:.4; flex-shrink:0; }
+  .res .wish.on { opacity:1; }
+  #wish-open { font-size:12px; }
+  #wish-list { display:flex; flex-direction:column; gap:6px; overflow-y:auto; }
+  .wrow { display:flex; gap:10px; align-items:center; background:#fff; border:1px solid var(--line);
+          border-radius:6px; padding:9px 12px; }
+  .wrow .sp { width:5px; height:30px; border-radius:1px; flex-shrink:0; }
+  .wrow .t { font-size:13px; font-weight:700; display:block; }
+  .wrow .a { font-size:11px; color:var(--ink3); }
+  .wrow input[type=checkbox] { width:17px; height:17px; flex-shrink:0; cursor:pointer; }
+  .wrow .rm { margin-left:auto; font-size:11px; color:var(--ink3); background:none; border:none;
+              cursor:pointer; flex-shrink:0; }
 
   #m-lines .card { width:556px; height:100%; max-height:530px; }
   #m-lines .top { display:flex; gap:12px; align-items:center; margin-bottom:13px; flex-shrink:0; }
@@ -960,13 +973,21 @@
 
   <div class="ov" id="m-search"><div class="card">
     <h3 class="hd">책 찾기</h3>
-    <div class="cap">제목 · 저자로 찾아서 내 책장에 꽂습니다</div>
+    <div class="cap">제목 · 저자로 찾아서 내 책장에 꽂습니다 ·
+      <a href="#" id="wish-open">🔖 읽고 싶은 책 <span id="wish-count">0</span>개</a></div>
     <input id="q" type="text" placeholder="제목이나 저자를 입력하세요" autocomplete="off">
     <div class="chips" id="chips"></div>
     <div class="results" id="results"></div>
     <div class="hd" id="real-hd" style="margin-top:14px;font-size:13px">실제 도서관 장서</div>
     <div class="cap" id="real-cap"></div>
     <div class="results" id="results-real"></div>
+    <div class="sub">Esc 로 닫기</div>
+  </div></div>
+
+  <div class="ov" id="m-wish"><div class="card">
+    <h3 class="hd">읽고 싶은 책</h3>
+    <div class="cap">다 읽었으면 체크해서 내 책장으로 옮기세요</div>
+    <div id="wish-list"></div>
     <div class="sub">Esc 로 닫기</div>
   </div></div>
 

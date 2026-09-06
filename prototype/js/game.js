@@ -377,7 +377,7 @@ let place = { kind:'room', idx: 0, vi: vidx(ROOMS[0].village) };
 let camX = 0, camY = 0;
 const player = { x: DOOR.x + 4, y: 108, dir:'down', moving:false, anim:0 };
 const keys = {};
-const readKdc = new Set(), borrowed = new Set();
+const readKdc = new Set(), borrowed = new Set(), wishlist = new Set();
 let focus = null, openOv = null, edit = false, drag = null, sel = null;
 let walkTo = null;                                  // 클릭 이동 목표
 const flights = [], flyFx = [];
@@ -2292,7 +2292,7 @@ function snapshot() {
   return { who:R.who, bio:R.bio, village:R.village,
            wall:R.wall, floor:R.floor, wood:R.wood, rug:R.rug, hair:R.hair, shirt:R.shirt,
            items:R.items.map(item2), visitors:R.visitors.slice(0, 12),
-           freeNotes: (R.freeNotes || []).slice(-50) };
+           freeNotes: (R.freeNotes || []).slice(-50), wishlist: Array.from(wishlist) };
 }
 let syncT = null;
 function syncRoom() {
@@ -3009,7 +3009,7 @@ function openSearch() {
     ch.appendChild(el);
   }
   runSearch(); setTimeout(() => qEl.focus(), 30);
-  renderRealBooks(); Books.refresh();
+  renderRealBooks(); Books.refresh(); renderWishCount();
 }
 Books.onChange(() => { autoBindAllVillages(); if (openOv === 'search') renderRealBooks(); });
 // 마을 도서관 이름은 지어낸 것이라 실제 기관과 우연히 같을 일이 거의 없다.
@@ -3093,13 +3093,55 @@ function runSearch() {
     el.innerHTML = '<span class="sp" style="background:' + x.col + '"></span>' +
       '<span><span class="t">' + x.t + '</span><span class="a">' + x.a + '</span></span>' +
       '<span class="k">' + (have ? '꽂혀 있음' : x.kdc + ' ' + kdcName(x.kdc)) + '</span>';
-    if (!have) el.onclick = () => {
-      addToMyShelf(Object.assign({}, x, { done:false }));
-      Audio8.play('coin'); runSearch(); toast('『' + x.t + '』를 책장에 꽂았어요');
-    };
+    if (!have) {
+      el.onclick = () => {
+        addToMyShelf(Object.assign({}, x, { done:false }));
+        wishlist.delete(x.t);
+        Audio8.play('coin'); runSearch(); renderWishCount(); toast('『' + x.t + '』를 책장에 꽂았어요');
+      };
+      const wOn = wishlist.has(x.t);
+      const wishBtn = document.createElement('button');
+      wishBtn.className = 'wish' + (wOn ? ' on' : ''); wishBtn.textContent = '🔖';
+      wishBtn.title = wOn ? '위시리스트에서 빼기' : '읽고 싶은 책에 담기';
+      wishBtn.onclick = ev => {
+        ev.stopPropagation();
+        if (wishlist.has(x.t)) wishlist.delete(x.t); else wishlist.add(x.t);
+        Audio8.play('select'); runSearch(); renderWishCount(); syncRoom();
+      };
+      el.appendChild(wishBtn);
+    }
     resEl.appendChild(el);
   }
 }
+function renderWishCount() {
+  const el = $('wish-count'); if (el) el.textContent = wishlist.size;
+}
+function openWish() { renderWish(); showOv('wish'); }
+function renderWish() {
+  renderWishCount();
+  const box = $('wish-list'); box.innerHTML = '';
+  const titles = Array.from(wishlist);
+  if (!titles.length) { box.innerHTML = '<div class="none">아직 담은 책이 없어요 — 책 찾기에서 🔖을 눌러보세요</div>'; return; }
+  titles.forEach(t => {
+    const bk = CATALOG.find(c => c.t === t);
+    if (!bk) { wishlist.delete(t); return; }
+    const el = document.createElement('div');
+    el.className = 'wrow';
+    el.innerHTML = '<input type="checkbox">' +
+      '<span class="sp" style="background:' + bk.col + '"></span>' +
+      '<span><span class="t">' + bk.t + '</span><span class="a">' + bk.a + '</span></span>' +
+      '<button class="rm">✕</button>';
+    el.querySelector('input').onchange = () => {
+      wishlist.delete(t);
+      addToMyShelf(Object.assign({}, bk, { done:true }));
+      Audio8.play('dex'); toast('『' + bk.t + '』를 다 읽고 책장에 꽂았어요');
+      renderWish(); syncRoom();
+    };
+    el.querySelector('.rm').onclick = () => { wishlist.delete(t); renderWish(); syncRoom(); };
+    box.appendChild(el);
+  });
+}
+$('wish-open').onclick = e => { e.preventDefault(); openWish(); };
 function openStack(i) { kdcFilter = KDC[i][0]; qEl.value = ''; openSearch(); }
 
 let linesBook = null;
@@ -4964,7 +5006,8 @@ Gate.open(async () => {
             if (bk.done) readKdc.add(bk.kdc);
             if (bk.from) borrowed.add(bk.t);
           }));
-          renderDex(); renderStats();
+          wishlist.clear(); (s.wishlist || []).forEach(t => wishlist.add(t));
+          renderDex(); renderStats(); renderWishCount();
         }
       } catch (e) { /* 아직 저장된 방이 없는 새 계정 — 기본 방 그대로 둔다 */ }
     }
