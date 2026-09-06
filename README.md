@@ -105,6 +105,18 @@ $env:SUPABASE_SERVICE_KEY = "발급받은 service_role 키"
 node prototype/server.js
 ```
 
+## 이미지 생성 (배경 그림)
+
+방·상점 배경 그림을 AI로 생성할 때 쓰는 키입니다. 게임 실행에는 필요 없고,
+배경 작업할 때만 로컬에서 사용합니다. [aistudio.google.com/api-keys](https://aistudio.google.com/api-keys)
+에서 무료로 발급받을 수 있습니다.
+
+`.env` 파일(깃에 올라가지 않음)에 넣어 씁니다.
+
+```
+GEMINI_API_KEY=발급받은 키
+```
+
 ## 배포
 
 `render.yaml` 이 들어 있어 [Render](https://render.com) 에서 Blueprint로 바로 뜹니다.

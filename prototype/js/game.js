@@ -621,7 +621,8 @@ function renderDialog() {
     if (dialog.sel === undefined) dialog.sel = 0;
     dialog.choices.forEach((c, i) => {
       const b2 = document.createElement('button');
-      b2.textContent = c.label;
+      if (c.icon) { b2.appendChild(c.icon); b2.appendChild(document.createTextNode(' ' + c.label)); }
+      else b2.textContent = c.label;
       if (i === dialog.sel) b2.classList.add('sel');
       b2.onmouseenter = () => { dialog.sel = i; markSel(); };
       b2.onclick = ev => { ev.stopPropagation(); const f = c.fn; endDialog(); if (f) f(); };
@@ -755,6 +756,8 @@ function targets() {
     px: cx, py: (top || 0) + (hgt || 60), label, m:'x', half,
     hx: cx - half, hy: top || 0, hw: half * 2, hh: hgt || 66,
   }));
+
+  if (pet) add({ type:'pet' }, pet.x + 5, pet.y + 5, (pet.kind === 'cat' ? '🐱 ' : '🐶 ') + pet.name, 14);
 
   if (inTown()) {
     const tw = town();
@@ -1093,6 +1096,7 @@ const ACTIONS = {
              '표지 색이 다 바래서 제목이 잘 안 보이는 것도 있어요.'],
              [{ label:'가만히 들여다본다' }]),
   npc:     f => talkNpc(npcs[f.i]),
+  pet:     () => petDialog(),
   npc2:    f => talkNpc(place.people[f.i]),
   stack:   f => openStack(f.i),
   book:    f => openBook(f.book),
@@ -1396,14 +1400,48 @@ function adoptDialog() {
     { label:'다음에 올게요' },
   ]);
 }
+// 품종 미리보기 — 실제 펫이 걸어다닐 때와 같은 모양·색으로 작게 그려서
+// 이름만 보고 고르지 않게 한다
+function petIconEl(kind, c, c2) {
+  const cv = document.createElement('canvas');
+  cv.width = 16; cv.height = 12; cv.className = 'pet-ic';
+  const g = cv.getContext('2d');
+  const P = (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+  P(1, 6, 8, 5, c); P(1, 6, 8, 1, c2);                              // 몸
+  P(7, 3, 5, 5, c);                                                 // 머리
+  if (kind === 'cat') { P(7, 1, 2, 2, c); P(10, 1, 2, 2, c); }      // 귀
+  else { P(6, 4, 2, 4, c2); }                                       // 늘어진 귀
+  P(10, 5, 1, 1, '#241C1A'); P(11, 6, 1, 1, '#241C1A');             // 눈 · 코
+  P(0, 5, kind === 'cat' ? 2 : 3, kind === 'cat' ? 5 : 2, c2);       // 꼬리
+  return cv;
+}
 function pickBreed(kind) {
   say(kind === 'dog' ? '강아지들' : '고양이들', ['누가 마음에 드세요?'],
-    BREEDS[kind].map(b2 => ({ label:(kind === 'dog' ? '🐶 ' : '🐱 ') + b2.n, fn: () => {
+    BREEDS[kind].map(b2 => ({ label:b2.n, icon: petIconEl(kind, b2.c, b2.c2), fn: () => {
       pet = { kind, breed: b2.n, name: b2.n, c: b2.c, c2: b2.c2,
               x: player.x - 14, y: player.y + 6, dir:'right', anim:0, moving:false };
       Audio8.play('coin');
       toast((kind === 'dog' ? '🐶 ' : '🐱 ') + b2.n + '와(과) 함께 살기로 했어요');
     } })).concat([{ label:'조금 더 볼게요' }]));
+}
+const PET_TALK = {
+  dog: { greet:'멍멍!', lines:['꼬리를 힘차게 흔들어요.', '앞발로 발밑을 통통 두드려요.', '자꾸 문 쪽을 돌아봐요 — 산책 가고 싶은가 봐요.'],
+         verb:'쓰다듬기', react:'가 신나서 폴짝 뛰어요' },
+  cat: { greet:'야옹.', lines:['다리에 얼굴을 슥 문질러요.', '눈을 가늘게 뜨고 하품을 해요.', '갑자기 딴 곳을 보며 관심 없는 척해요.'],
+         verb:'쓰다듬기', react:'가 기분 좋은지 골골거려요' },
+};
+const PET_BREED_NOTE = {
+  진돗개:'멀리서도 주인을 알아보고 달려와요.', 시바:'표정이 늘 새침해요.',
+  포메라니안:'작은 몸으로 제일 크게 짖어요.', '검은 믹스':'낯을 좀 가리지만 정이 깊어요.',
+  코리안숏헤어:'어디든 잘 적응하는 편이에요.', 러시안블루:'조용하고 도도해요.',
+  삼색이:'성격이 확실해서 재미있어요.', 턱시도:'말끔한 정장을 입은 것 같아요.',
+};
+function petDialog() {
+  const T = PET_TALK[pet.kind];
+  say(pet.name, [T.greet, pickOne(T.lines), PET_BREED_NOTE[pet.breed] || ''].filter(Boolean),
+    [{ label:(pet.kind === 'cat' ? '🐱 ' : '🐶 ') + T.verb, fn: () => toast(pet.name + T.react) },
+     { label:'그만 보기' }]);
+  dialog.at = { x: pet.x + 5, y: pet.y }; placeBubble();
 }
 function updatePet(dt) {
   if (!pet) return;
@@ -1438,7 +1476,7 @@ const ROLES = [
   { name:'책방 주인', key:'헌책방', x:BLD.used.x + 60, y:BLD.used.y + BLD.used.h + 16, hair:'#4a3a2e', shirt:'#8a7a5e' },
   { name:'동네 아이', key:'아이', x:300, y:200, hair:'#3a2e28', shirt:'#e0b45a' },
   { name:'할머니', key:'할머니', x:120, y:322, hair:'#b0aca8', shirt:'#9aa8a0' },
-  { name:'보호소 지기', key:'보호소', x:452, y:330, hair:'#4a3a30', shirt:'#8ab08a', adopt:true },
+  { name:'보호소 지기', key:'보호소', x:452, y:396, hair:'#4a3a30', shirt:'#8ab08a', adopt:true },
   { name:'역무원', key:'역무원', x:BLD.train.x + BLD.train.w + 20, y:BLD.train.y + BLD.train.h - 6,
     hair:'#2E2A26', shirt:'#3E5068', station:true, cap:true },
 ];
@@ -4161,6 +4199,11 @@ function shellRoom(R, wide) {
   ctx.fillStyle = wg; ctx.fillRect(0, 0, ww, RT);
   ctx.fillStyle = wallLine;
   for (let x = 0; x < ww; x += 8) ctx.fillRect(x, 0, 1, RT);
+  // 걸레받이 — 벽 아래쪽만 나무 톤 띠로 갈라 벽돌+대리석처럼 두 톤을 준다
+  const baseH = 14, baseY = RT - baseH, baseCol = shade(R.wood || R.wall, .58);
+  px(0, baseY, ww, baseH, baseCol);
+  for (let x = 0; x < ww; x += 8) px(x, baseY, 1, baseH, shade(baseCol, 1.22));
+  px(0, baseY, ww, 2, shade(baseCol, 1.4));
   px(0, RT - 4, ww, 4, wallDark);
   for (let y = RT; y < H; y += 6) {
     px(0, y, ww, 6, ((y / 6) | 0) % 2 ? floorAlt : R.floor);
@@ -4216,6 +4259,14 @@ function drawItem(R, it, t) {
       px(gx + 2, gy, 1, gh, 'rgba(255,255,255,.14)');
       px(it.x + Math.round(it.w / 2) - 1, it.y + 3, 2, it.h - 6, '#6E5236');
       px(it.x + 3, it.y + Math.round(it.h / 2) - 1, it.w - 6, 2, '#6E5236');
+      // 커튼 — 옆에 다른 소품이 붙어 있어도 안 겹치게, 창틀 안쪽에서 양옆으로 묶어 올린 모양
+      const curt = shade(R.rug || '#B4645C', .95), cw = Math.max(3, Math.round(it.w * .24));
+      [it.x + 1, it.x + it.w - cw - 1].forEach(cx => {
+        px(cx, it.y + 1, cw, it.h - 2, curt);
+        px(cx, it.y + 1, 1, it.h - 2, shade(curt, 1.3));
+        px(cx + cw - 1, it.y + 1, 1, it.h - 2, shade(curt, .7));
+        px(cx, it.y + it.h - 5, cw, 2, shade(curt, .7));                            // 묶은 자리
+      });
       px(it.x - 6, RT, it.w + 12, H - RT, 'rgba(255,246,200,.13)'); break;
     }
     case 'frame':
@@ -4227,10 +4278,11 @@ function drawItem(R, it, t) {
       px(it.x, it.y, 10, 6, '#FFF0BC');
       px(it.x - 8, it.y + 6, 26, 22, 'rgba(255,240,180,.16)'); break;
     case 'plant':
-      px(it.x + 2, it.y + 10, 6, 6, '#B07A50'); px(it.x + 2, it.y + 10, 6, 1, '#8A5C38');
-      px(it.x + 4, it.y + 4, 2, 7, '#5F9A5A');
-      px(it.x + 1, it.y + 2, 3, 4, '#5F9A5A'); px(it.x + 6, it.y + 3, 3, 4, '#5F9A5A');
-      px(it.x + 3, it.y, 4, 3, '#7CBC72'); break;
+      potShape(it.x, it.y + 9, 10, 7, '#B07A50');
+      px(it.x + 1, it.y + 16, 8, 1, 'rgba(0,0,0,.15)');
+      px(it.x + 4, it.y + 3, 2, 7, '#5F9A5A');
+      blob(it.x + 1, it.y + 4, 3, '#5F9A5A'); blob(it.x + 8, it.y + 5, 3, '#6BA860');
+      blob(it.x + 5, it.y, 3.6, '#7CBC72'); blob(it.x + 3, it.y + 2, 2.4, '#8CCB80'); break;
     case 'poster': {
       const on = isF('poster', 'it', it);
       if (on) { ctx.fillStyle = GLOW; ctx.fillRect(it.x - 3, it.y - 3, it.w + 6, it.h + 6); }
