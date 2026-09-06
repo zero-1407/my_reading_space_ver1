@@ -4729,15 +4729,10 @@ function drawItem(R, it, t) {
       px(it.x + 3, it.y + 3, it.w - 6, it.h - 6, shade(R.wall, 1.28));
       sprite(BODY.down.slice(0, 8), it.x + 8, it.y + 6, false, { h:R.hair, c:R.shirt }); break;
     case 'lamp':
-      px(it.x + 4, it.y + 6, 2, 12, '#6E5236');
-      px(it.x, it.y, 10, 6, '#FFF0BC');
-      px(it.x - 8, it.y + 6, 26, 22, 'rgba(255,240,180,.16)'); break;
+      px(it.x - 8, it.y + 6, 26, 22, 'rgba(255,240,180,.16)');
+      Art.drawArt(Art.LAMP_ART, it.x, it.y); break;
     case 'plant':
-      potShape(it.x, it.y + 9, 10, 7, '#B07A50');
-      px(it.x + 1, it.y + 16, 8, 1, 'rgba(0,0,0,.15)');
-      px(it.x + 4, it.y + 3, 2, 7, '#5F9A5A');
-      blob(it.x + 1, it.y + 4, 3, '#5F9A5A'); blob(it.x + 8, it.y + 5, 3, '#6BA860');
-      blob(it.x + 5, it.y, 3.6, '#7CBC72'); blob(it.x + 3, it.y + 2, 2.4, '#8CCB80'); break;
+      Art.drawArt(Art.PLANT_ART, it.x, it.y - 4); break;
     case 'poster': {
       const on = isF('poster', 'it', it);
       if (on) { ctx.fillStyle = GLOW; ctx.fillRect(it.x - 3, it.y - 3, it.w + 6, it.h + 6); }
