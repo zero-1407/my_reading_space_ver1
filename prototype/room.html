@@ -1140,8 +1140,8 @@
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
   addEventListener('load', function () {
     navigator.serviceWorker.register('sw.js').then(function (reg) {
-      reg.update();
-      setInterval(function () { reg.update(); }, 60 * 60 * 1000);
+      reg.update().catch(function () {});
+      setInterval(function () { reg.update().catch(function () {}); }, 60 * 60 * 1000);
       reg.addEventListener('updatefound', function () {
         var sw = reg.installing;
         if (!sw) return;
