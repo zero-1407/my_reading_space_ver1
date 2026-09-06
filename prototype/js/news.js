@@ -6,16 +6,21 @@
 //   책·출판·문학 기사가 위로 올라온다 — 여기는 도서관이니까.
 // ════════════════════════════════════════════════════════════════
 
-// 분야별로 나눠 보기 — RSS 원문엔 분류가 없어서, 제목·요약의 낱말로 짐작한다
+// 분야별로 나눠 보기 — 사설·칼럼은 서버가 어느 RSS에서 왔는지 알아서 opinion 표시를
+// 붙여주고, 나머지는 원문에 분류가 없어서 제목·요약의 낱말로 짐작한다
 const NEWS_CATS = [
   { key:'book',  label:'책 · 출판', re:/책|출판|소설|시집|작가|서점|도서관|문학|에세이|북페어|신간|평론가?|시인/ },
   { key:'show',  label:'전시 · 공연', re:/전시|공연|연극|무용|축제|박물관|미술관|갤러리|비엔날레|퍼포먼스|뮤지컬|전람회/ },
   { key:'film',  label:'영화 · 방송', re:/영화|드라마|방송|다큐|넷플릭스|OTT|시리즈|박스오피스|감독|배우|예능|천만 관객/ },
   { key:'music', label:'음악', re:/음악|콘서트|앨범|가수|밴드|오케스트라|공연장|트롯|아이돌|케이팝|K-?[Pp]op|싱어송라이터/ },
+  { key:'sci',   label:'과학 · 공학', re:/과학|공학|기술|연구진|로봇|인공지능|[Aa][Ii]\b|반도체|우주|나사|NASA|백신|바이러스|양자|배터리|자율주행|스타트업|특허|발사체|위성/ },
+  { key:'stock', label:'경제 · 증시', re:/증시|코스피|코스닥|주가|금리|환율|경기|투자|부동산|물가|수출|GDP|증권|채권|급등|급락|상장|배당|시가총액/ },
+  { key:'editorial', label:'사설 · 칼럼', re:null },
 ];
 function newsCatOf(a) {
+  if (a.opinion) return 'editorial';
   const hay = (a.title || '') + ' ' + (a.summary || '');
-  for (const c of NEWS_CATS) if (c.re.test(hay)) return c.key;
+  for (const c of NEWS_CATS) if (c.re && c.re.test(hay)) return c.key;
   return 'etc';
 }
 
@@ -69,13 +74,18 @@ const News = (() => {
     get note() { return note; },
     onChange(f) { subs.push(f); },
     refresh,
-    list(cat) {                                // 온 순서 그대로 — 최신순. cat 을 주면 그 분야만
+    list(cat, source) {                        // 온 순서 그대로 — 최신순. cat·source 를 주면 그것만
       const all = items || FALLBACK;
-      return cat ? all.filter(a => a.cat === cat) : all;
+      return all.filter(a => (!cat || a.cat === cat) && (!source || a.source === source));
     },
     counts() {                                 // 분야별 개수 — 칩에 몇 건인지 보여주려고
       const all = items || FALLBACK, out = {};
       all.forEach(a => { out[a.cat] = (out[a.cat] || 0) + 1; });
+      return out;
+    },
+    sources() {                                // 신문사별 개수 — 출처 칩에 쓴다
+      const all = items || FALLBACK, out = {};
+      all.forEach(a => { out[a.source] = (out[a.source] || 0) + 1; });
       return out;
     },
   };

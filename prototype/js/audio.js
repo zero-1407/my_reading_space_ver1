@@ -216,6 +216,9 @@ const Audio8 = (() => {
       tone(48, t, 2.2, .07, 'sine', 28);
     },
     water:(t) => noise(t, .5, .05, 700, .6, 1600),
+    // 박수 — 짧은 노이즈 조각 여러 번을 살짝씩 어긋나게 겹쳐서 여럿이 치는 느낌을 낸다
+    clap:(t) => [0, .05, .1, .16, .23, .31, .4].forEach((dt, i) =>
+      noise(t + dt + Math.random() * .015, .045, .085 - i * .006, 2000 + Math.random() * 800, .6, 1200)),
 
     // ── 기차 ────────────────────────────────────────────────
     whistle:(t) => {                              // 기적 — 두 음이 겹친 바람 소리
@@ -276,6 +279,30 @@ const Audio8 = (() => {
     ambSrc.start();
   }
 
+  // ── 벽난로 — 켜져 있는 동안 은은한 노이즈 위에 탁탁 튀는 소리를 불규칙하게 얹는다
+  let fireSrc = null, fireGain = null, fireTimer = null, fireOn = false;
+  function scheduleCrackle() {
+    if (!fireOn) return;
+    if (sfxOn) noise(ac.currentTime + .01, .035, .05 + Math.random() * .05,
+      2200 + Math.random() * 1800, 4, 1000);
+    fireTimer = setTimeout(scheduleCrackle, 180 + Math.random() * 420);
+  }
+  function fireLoop(on) {
+    ensure();
+    fireOn = !!on;
+    if (fireSrc) { try { fireSrc.stop(); } catch (e) {} fireSrc = null; }
+    if (fireTimer) { clearTimeout(fireTimer); fireTimer = null; }
+    if (!fireOn) return;
+    fireSrc = ac.createBufferSource(); fireSrc.buffer = noiseBuf; fireSrc.loop = true;
+    const f = ac.createBiquadFilter();
+    fireGain = ac.createGain();
+    f.type = 'bandpass'; f.frequency.value = 2600; f.Q.value = .25;
+    fireGain.gain.value = .045;
+    fireSrc.connect(f); f.connect(fireGain); fireGain.connect(sfxGain);
+    fireSrc.start();
+    scheduleCrackle();
+  }
+
   let lastStep = 0;
   return {
     tracks: TRACKS,
@@ -304,7 +331,7 @@ const Audio8 = (() => {
       return sfxOn;
     },
     play(name) { if (ac && sfxOn && SFX[name]) SFX[name](ac.currentTime + .002); },
-    ambience,
+    ambience, fireLoop,
     footstep(outdoor) {
       if (!ac || !sfxOn) return;
       const now = ac.currentTime;

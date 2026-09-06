@@ -45,9 +45,11 @@ const countryOf = v => COUNTRIES.find(c => c.key === v.country);
 const TOWN = { w: 880, h: 560 };
 const RT = 70, RB = 130, PAD = 6;                       // 방 바닥 위/아래
 const ROOM_W = 380;                                     // 방을 옆으로 넓혔다 — 문 걸 자리
+const WALL_T = 10;                                      // 방(내 방·남의 방)에서만 보이는 옆벽 두께
 const DOOR = { x: 214, y: 18, w: 34, h: 52 };           // 밖으로 나가는 문
-// 손님 문 — 이 문 하나로 어디든 간다. 친구가 몇이든 벽이 안 무너진다.
-const VDOOR = { x: 272, y: 16, w: 38, h: 54 };
+// 손님 창 — 이제 문이 아니라 창가 자리다. 바닥의 이동진을 밟으면 다른 사람 방으로 간다.
+const VWIN = { x: 262, y: 16, w: 54, h: 38 };
+const PORTAL = { x: 288, y: 133, rx: 18, ry: 7 };       // 창문 앞 바닥의 이동진
 const LIB_W = 1040, LIB_DOOR = { x: 14, y: 18, w: 34, h: 52 };
 const LIB_DESK  = { x: 62,  y: 88, w: 52, h: 20 };
 const LIB_RANK  = { x: 132, y: 16, w: 56, h: 34 };
@@ -378,6 +380,9 @@ let camX = 0, camY = 0;
 const player = { x: DOOR.x + 4, y: 108, dir:'down', moving:false, anim:0 };
 const keys = {};
 const readKdc = new Set(), borrowed = new Set(), wishlist = new Set();
+let SHELF_CATS = ['읽고 싶은 책', '읽는 중', '다 읽음'];
+let shelfFilter = null;
+let CAL_EVENTS = [];   // { id, title, date:'YYYY-MM-DD' } — 내 일정
 let focus = null, openOv = null, edit = false, drag = null, sel = null;
 let walkTo = null;                                  // 클릭 이동 목표
 const flights = [], flyFx = [];
@@ -545,7 +550,11 @@ $('pocket').onclick = () => {
   say('주머니 · ' + SEASON.label,
     [Object.keys(pocket).map(k => Season.ITEMS[k].emo + ' ' + Season.ITEMS[k].name + ' ' + pocket[k] + '개').join('\n'),
      '책을 펼치고 「책갈피 끼우기」를 누르면 눌러 끼울 수 있어요.'],
-    [{ label:'알겠어요' }]);
+    [{ label:'🗑 주머니 비우기', fn: () => {
+        Object.keys(pocket).forEach(k => delete pocket[k]);
+        renderPocket(); Audio8.play('page'); toast('주머니를 비웠어요');
+      } },
+     { label:'알겠어요' }]);
 };
 
 const inTown = () => place.kind === 'town';
@@ -564,7 +573,8 @@ const world  = () => inTown() ? TOWN : inLib() ? { w: LIB_W, h: H }
                    : inJazz() ? { w: JAZZ_W, h: H } : inShop() ? { w: SHOP_W, h: H }
                    : { w: ROOM_W, h: H };
 
-const shelves  = R => R.items.filter(i => i.kind === 'shelf');
+const SURFACE_KINDS = ['shelf', 'table', 'sofa'];
+const shelves  = R => R.items.filter(i => SURFACE_KINDS.includes(i.kind));
 const allBooks = R => shelves(R).flatMap(s => s.books);
 const owned    = () => new Set(allBooks(ROOMS[0]).map(x => x.t));
 const myVillage = () => vidx(ROOMS[0].village);
@@ -586,6 +596,7 @@ const demoMs = km => Math.min(45000, Math.max(8000, km * 60));
 
 // ── 책장 배치 ─────────────────────────────────────────────────
 function boardsOf(s) {
+  if (s.kind !== 'shelf') return [s.y + 16];   // 테이블·소파 — 상판 한 줄에 책을 세워둔다
   const rows = Math.max(1, Math.floor((s.h - 4) / 16)), out = [];
   for (let i = 0; i < rows; i++) out.push(s.y + 4 + 16 * (i + 1));
   return out;
@@ -886,7 +897,7 @@ function targets() {
     }));
   };
   wall({ type:'out' }, DOOR, '밖으로 나가기', 6);
-  wall({ type:'visit' }, VDOOR, '손님 문 · 다른 사람 방으로', 8);
+  { const pp = portalOf(R); add({ type:'visit' }, pp.x, pp.y, '이동진 · 다른 사람 방으로', 18); }
   R.items.forEach(it => {
     if (it.kind === 'poster') wall({ type:'poster', it }, it, '포스터 크게 보기');
     if (it.kind === 'frame')  wall({ type:'poster', it }, it, '액자 크게 보기');
@@ -894,6 +905,7 @@ function targets() {
     if (it.kind === 'journal') wall({ type:'journal' }, it, '내가 남긴 문장 보기');
     if (it.kind === 'window') wall({ type:'window' }, it, '창밖 보기');
     if (it.kind === 'plant')  wall({ type:'plant', it }, it, '화분 살펴보기', 10);
+    if (it.kind === 'fireplace') wall({ type:'fireplace', it }, it, it.lit ? '벽난로 끄기' : '벽난로 켜기', 6);
     if (it.kind === 'perch' && R.letters.length)
       wall({ type:'perch' }, { x:it.x, y:it.y - 10, w:it.w, h:12 }, '도착한 문장 읽기');
   });
@@ -972,6 +984,13 @@ const ACTIONS = {
                     if (i >= 0) R.items.splice(i, 1);
                     Audio8.play('page'); toast('화분을 치웠어요');
                   } }]); },
+  fireplace: f => {
+    const p = f.it;
+    p.lit = !p.lit;
+    Audio8.play(p.lit ? 'pin' : 'page');
+    updateFireSound();
+    toast(p.lit ? '벽난로에 불을 붙였어요' : '벽난로를 껐어요');
+  },
   furn:    () => enterShop('furn'),
   museum:  () => enterShop('museum'),
   shopdesk:() => SHOPS[place.key].action(),
@@ -986,7 +1005,7 @@ const ACTIONS = {
   stage:   () => say('무대', ['넷이 소리를 맞추고 있어요.',
              '피아노가 먼저 물러서고, 색소폰이 한참 혼자 갑니다.',
              '아무도 박수를 치지 않지만 다들 듣고 있어요.'],
-             [{ label:'👏 조용히 박수', fn: () => { Audio8.play('right'); toast('연주자가 고개를 끄덕였어요'); } },
+             [{ label:'👏 조용히 박수', fn: () => { Audio8.play('clap'); toast('연주자가 고개를 끄덕였어요'); } },
               { label:'계속 듣는다' }]),
   counter: () => say('바텐더', ['오늘은 뭘로 하시겠어요?', '읽던 책 있으면 여기 두셔도 돼요.'],
              [{ label:'🥃 한 잔', fn: () => { Audio8.play('coin'); startEating('tea');
@@ -1725,6 +1744,10 @@ $('sw-go').onclick = () => {
 const FURNITURE = [
   { kind:'shelf', name:'작은 책장',   d:'책 열 권쯤 들어가요', mk: () => shelf(120, 26, 46, 38, []) },
   { kind:'shelf', name:'큰 책장',     d:'세 칸짜리',           mk: () => shelf(118, 10, 64, 56, []) },
+  { kind:'table', name:'테이블',      d:'바닥 아무 데나 놓고 책을 올려요', mk: () => surface('table', 150, 108, 46, 14, []) },
+  { kind:'table', name:'책상',        d:'좁고 깊어요',          mk: () => surface('table', 150, 104, 36, 20, []) },
+  { kind:'sofa',  name:'소파',        d:'등받이가 있어요',      mk: () => surface('sofa', 150, 98, 52, 26, []) },
+  { kind:'fireplace', name:'벽난로',  d:'방이 한결 아늑해져요', mk: () => item({ kind:'fireplace', x:180, y:18, w:26, h:40 }) },
   { kind:'lamp',  name:'스탠드 조명', d:'밤에 켜두면 좋아요',  mk: () => item({ kind:'lamp', x:200, y:52, w:10, h:20 }) },
   { kind:'rug',   name:'러그',        d:'바닥이 따뜻해집니다', mk: () => item({ kind:'rug', x:120, y:100, w:60, h:28 }) },
   { kind:'frame', name:'액자',        d:'벽에 걸어두세요',     mk: () => item({ kind:'frame', x:180, y:16, w:26, h:28 }) },
@@ -2281,18 +2304,21 @@ function snapshot() {
   const R = ROOMS[0];
   const item2 = it => {
     const o = { kind:it.kind, x:it.x, y:it.y, w:it.w, h:it.h };
-    if (it.kind === 'shelf') o.books = it.books.map(b2 => ({
+    if (SURFACE_KINDS.includes(it.kind)) o.books = it.books.map(b2 => ({
       t:b2.t, a:b2.a, kdc:b2.kdc, col:b2.col, h:b2.h, w:b2.w, note:b2.note,
-      from:b2.from, done:!!b2.done, memos:b2.memos || [], pressed:b2.pressed || [] }));
+      from:b2.from, done:!!b2.done, memos:b2.memos || [], pressed:b2.pressed || [], cat:b2.cat || null }));
     if (it.kind === 'poster') { o.art = it.art; o.title = it.title; o.desc = it.desc;
       if (it.src && it.src.length < 260000) o.src = it.src; }   // 너무 큰 사진은 빼고 도트만
     if (it.kind === 'plant') { o.grow = it.grow || 0; o.species = it.species; }
+    if (it.kind === 'rug' && it.round) o.round = true;
+    if (it.kind === 'fireplace') { o.style = it.style || 0; o.lit = it.lit !== false; }
     return o;
   };
   return { who:R.who, bio:R.bio, village:R.village,
            wall:R.wall, floor:R.floor, wood:R.wood, rug:R.rug, hair:R.hair, shirt:R.shirt,
            items:R.items.map(item2), visitors:R.visitors.slice(0, 12),
-           freeNotes: (R.freeNotes || []).slice(-50), wishlist: Array.from(wishlist) };
+           freeNotes: (R.freeNotes || []).slice(-50), wishlist: Array.from(wishlist), shelfCats: SHELF_CATS,
+           calEvents: CAL_EVENTS, portal: R.portal || null };
 }
 let syncT = null;
 function syncRoom() {
@@ -2305,7 +2331,7 @@ function roomFromSnapshot(s) {
     who:s.who || '이름 없는 사람', bio:s.bio || '', village:s.village || 'seongsu',
     wall:s.wall || '#8E80AE', floor:s.floor || '#C4A57E', wood:s.wood || '#B08A5E',
     rug:s.rug || '#C4808E', hair:s.hair || '#7a4f3a', shirt:s.shirt || '#7fa88a',
-    remote:true, code:s.code,
+    remote:true, code:s.code, portal: s.portal || null,
   });
   R.items = (s.items || []).map(it => Object.assign({ id: uid++ }, it));
   if (!vidx(R.village)) R.village = VIL[0].key;
@@ -2412,7 +2438,7 @@ $('vs-copy').onclick = async () => {
 // ── 신문 ──────────────────────────────────────────────────────
 //  문화면 RSS 를 그대로 건다. 제목·요약까지만 보여주고 본문은 신문사로 보낸다.
 //  분야는 원문에 없어서 제목·요약의 낱말로 짐작해 나눈다 (news.js 의 newsCatOf).
-let newsFilter = null;
+let newsFilter = null, newsSourceFilter = null;
 function openNews() { renderNews(); showOv('news'); News.refresh(); }
 News.onChange(() => { if (openOv === 'news') renderNews(); });
 function renderNews() {
@@ -2438,7 +2464,22 @@ function renderNews() {
     chips.appendChild(el);
   }
 
-  const list = News.list(newsFilter);
+  // 신문사별로도 따로 볼 수 있게 — 연합·경향·동아·매경·조선·한겨레
+  const srcCnt = News.sources();
+  const srcChips = $('nw-src-chips'); srcChips.innerHTML = '';
+  const srcAll = document.createElement('button');
+  srcAll.className = 'chip' + (newsSourceFilter ? '' : ' on'); srcAll.textContent = '신문사 전체';
+  srcAll.onclick = () => { newsSourceFilter = null; renderNews(); };
+  srcChips.appendChild(srcAll);
+  Object.keys(srcCnt).sort().forEach(src => {
+    const el = document.createElement('button');
+    el.className = 'chip' + (newsSourceFilter === src ? ' on' : '');
+    el.textContent = src + ' ' + srcCnt[src];
+    el.onclick = () => { newsSourceFilter = src; renderNews(); };
+    srcChips.appendChild(el);
+  });
+
+  const list = News.list(newsFilter, newsSourceFilter);
   $('nw-cap').innerHTML = SEASON.label + ' · <span class="src ' + News.state + '">' +
     esc(News.note) + '</span>';
   const box = $('nw-list'); box.innerHTML = '';
@@ -2632,7 +2673,9 @@ function openBook(bk) {
     const it = Season.ITEMS[p.kind];
     const el = document.createElement('span');
     el.className = 'press';
-    el.innerHTML = it.emo + ' <b>' + it.name + '</b> <small>' + p.when + '</small>';
+    el.innerHTML = it.emo + ' <b>' + it.name + '</b> <small>' + esc(p.who || '누군가') + ' · ' + p.when +
+      (p.page ? ' · ' + p.page + '쪽' : '') + '</small>' +
+      (p.note ? '<div class="press-note">' + esc(p.note) + '</div>' : '');
     pp.appendChild(el);
   });
   // 누군가 끼워둔 쪽지
@@ -2658,37 +2701,58 @@ function openBook(bk) {
   else btn.textContent = '빌려가기 → 내 책장에 꽂기';
   $('b-drop').style.display = isHome() ? 'block' : 'none';
   $('b-memo').textContent = isHome() ? '📎 이 책에 메모 남겨두기' : '📎 책 사이에 메모 끼워두기';
+  $('b-press-panel').style.display = 'none';
   showOv('book');
 }
 // 책 사이 메모 — 남의 책장에 꽂힌 책을 펼치면 나오는 쪽지
 // 책갈피 — 주운 잎이나 꽃을 책 사이에 눌러 끼운다
 $('b-press').onclick = () => {
+  const bk = activeBook;
+  if ((bk.pressed || []).length >= 3) {
+    toast('책갈피는 책 한 권에 최대 3개까지만 끼울 수 있어요'); return;
+  }
   const have = Object.keys(pocket).filter(k => pocket[k] > 0);
   if (!have.length) {
-    say('책갈피', ['주머니가 비어 있어요.', '마을 길에 떨어진 잎이나 꽃을 주워 오세요.'],
-      [{ label:'알겠어요' }]);
-    return;
+    toast('주머니가 비어 있어요 · 마을 길에 떨어진 잎이나 꽃을 주워 오세요'); return;
   }
-  const bk = activeBook;
-  say('책갈피 끼우기', ['『' + bk.t + '』 사이에 무엇을 끼울까요?'],
-    have.map(k => {
-      const it = Season.ITEMS[k];
-      return { label: it.emo + ' ' + it.name + ' (' + pocket[k] + '개)', fn: () => {
-        pocket[k]--; if (!pocket[k]) delete pocket[k];
-        const entry = { kind:k, when: SEASON.label };
-        (bk.pressed = bk.pressed || []).push(entry);
-        renderPocket(); Audio8.play('page');
-        if (isHome()) syncRoom();
-        else if (Net.online && room().remote) {
-          const si = shelves(room()).indexOf(shelfOf(room(), bk));
-          Net.leaveTrace(room().code, si, bk.t, 'pressed', entry)
-            .catch(err => toast('저장 못 했어요 — ' + err.message));
-        }
-        toast(it.emo + ' ' + it.name + '을(를) 눌러 끼웠어요 — ' +
-          (isHome() ? '내 책이에요' : room().who + '의 책에 남았어요'));
-        openBook(bk);
-      } };
-    }).concat([{ label:'그만두기' }]));
+  const sel = $('bp-item'); sel.innerHTML = '';
+  have.forEach(k => {
+    const o = document.createElement('option'); o.value = k;
+    o.textContent = Season.ITEMS[k].emo + ' ' + Season.ITEMS[k].name + ' (' + pocket[k] + '개)';
+    sel.appendChild(o);
+  });
+  $('bp-cap').textContent = '『' + bk.t + '』 사이에 무엇을 끼울까요?';
+  $('bp-page').value = ''; $('bp-note').value = '';
+  $('b-press-panel').style.display = 'block';
+};
+$('bp-cancel').onclick = () => { $('b-press-panel').style.display = 'none'; };
+$('bp-confirm').onclick = () => {
+  const bk = activeBook, k = $('bp-item').value;
+  if (!k || !pocket[k]) { $('b-press-panel').style.display = 'none'; return; }
+  const page = $('bp-page').value.trim();
+  if (page && !/^\d{1,4}$/.test(page)) { toast('페이지는 숫자로 적어주세요'); return; }
+  const note = $('bp-note').value.trim().slice(0, 80);
+  if (note) {
+    const r = scan(note);
+    if (!r.ok) { toast('✕ ' + r.tag + ' — ' + r.why); Audio8.play('wrong'); return; }
+  }
+  const it = Season.ITEMS[k];
+  pocket[k]--; if (!pocket[k]) delete pocket[k];
+  const entry = { kind:k, when: SEASON.label, who:'나', page: page || null, note: note || null };
+  (bk.pressed = bk.pressed || []).push(entry);
+  renderPocket(); Audio8.play('page');
+  if (isHome()) syncRoom();
+  else if (Net.online && room().remote) {
+    const si = shelves(room()).indexOf(shelfOf(room(), bk));
+    // 흔적 종류 선택자(kind:'pressed')와 안 겹치게, 잎·꽃 종류는 itemKind 로 보낸다
+    Net.leaveTrace(room().code, si, bk.t, 'pressed',
+      { itemKind:k, when: SEASON.label, page: page || null, note: note || null })
+      .catch(err => toast('저장 못 했어요 — ' + err.message));
+  }
+  toast(it.emo + ' ' + it.name + '을(를) 눌러 끼웠어요 — ' +
+    (isHome() ? '내 책이에요' : room().who + '의 책에 남았어요'));
+  $('b-press-panel').style.display = 'none';
+  openBook(bk);
 };
 $('b-memo').onclick = () => {
   if (!guard()) return;
@@ -2909,15 +2973,91 @@ function openMail(to, name) {
   showOv('mail');
 }
 function showLetter(x) {
-  $('l-from').textContent  = x.from + (x.book ? ' 이(가) 보낸 문장' : ' 이(가) 보낸 편지');
-  $('l-book').textContent  = x.book ? '『' + x.book + '』 에서' : '';
+  $('l-from').textContent  = x.from + (x.book ? ' 이(가) 보낸 문장' : x.date ? ' 이(가) 보낸 일정' : ' 이(가) 보낸 편지');
+  $('l-book').textContent  = x.book ? '『' + x.book + '』 에서' : (x.date ? x.date + ' · ' + ddayLabel(x.date) : '');
   $('l-quote').textContent = '“' + x.text + '”';
   $('l-meta').textContent  = '— ' + x.from;
+  const addBtn = $('l-addcal');
+  if (x.date) {
+    addBtn.style.display = 'block';
+    addBtn.onclick = () => {
+      CAL_EVENTS.push({ id:Date.now(), title: x.text.replace(/^📅\s*/, ''), date: x.date });
+      syncRoom(); Audio8.play('pin'); toast('내 일정에 추가했어요'); addBtn.style.display = 'none';
+    };
+  } else addBtn.style.display = 'none';
   showOv('letter');
 }
 function openLetter() {
   const L = room().letters.find(x => !x.read) || room().letters[0];
   if (!L) return; L.read = true; showLetter(L);
+}
+
+// ── 내 일정 · D-day ──────────────────────────────────────────
+function ddayLabel(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00'), now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const diff = Math.round((d - now) / 86400000);
+  return diff === 0 ? 'D-DAY' : diff > 0 ? 'D-' + diff : 'D+' + (-diff);
+}
+$('btn-cal').onclick = () => openCal();
+function openCal() {
+  $('cal-title-in').value = ''; $('cal-date-in').value = '';
+  renderCal(); showOv('cal');
+}
+function renderCal() {
+  const box = $('cal-list');
+  const list = CAL_EVENTS.slice().sort((a, b) => a.date.localeCompare(b.date));
+  box.innerHTML = '';
+  if (!list.length) { box.innerHTML = '<div class="none">등록된 일정이 없어요<br>이름과 날짜를 넣어 첫 일정을 만들어보세요</div>'; return; }
+  list.forEach(ev => {
+    const el = document.createElement('div');
+    el.className = 'calrow2';
+    el.innerHTML = '<span class="dday">' + ddayLabel(ev.date) + '</span>' +
+      '<span class="info"><b>' + esc(ev.title) + '</b><span class="dt">' + ev.date + '</span></span>' +
+      '<button class="share">👥 공유</button><button class="rm">✕</button>';
+    el.querySelector('.rm').onclick = () => {
+      CAL_EVENTS.splice(CAL_EVENTS.indexOf(ev), 1); renderCal(); syncRoom();
+    };
+    el.querySelector('.share').onclick = () => openCalShare(ev);
+    box.appendChild(el);
+  });
+}
+$('cal-add').onclick = () => {
+  const title = $('cal-title-in').value.trim(), date = $('cal-date-in').value;
+  if (!title) { toast('일정 이름을 넣어주세요'); return; }
+  if (!date) { toast('날짜를 골라주세요'); return; }
+  CAL_EVENTS.push({ id:Date.now(), title, date });
+  $('cal-title-in').value = ''; $('cal-date-in').value = '';
+  renderCal(); syncRoom(); Audio8.play('pin'); toast('일정을 등록했어요');
+};
+let calShareEv = null;
+async function openCalShare(ev) {
+  calShareEv = ev;
+  $('cs-cap').textContent = '『' + ev.title + '』(' + ev.date + ')를 함께 챙길 친구를 골라주세요';
+  const box = $('cs-friends'); box.innerHTML = '<div class="none">불러오는 중…</div>';
+  showOv('calshare');
+  let list = [];
+  try { list = Net.online ? await Net.friends() : []; } catch (e) { list = []; }
+  box.innerHTML = '';
+  if (!list.length) {
+    box.innerHTML = '<div class="none">' + (Net.online
+      ? '아직 친구가 없어요 · 손님 문에서 코드를 주고받아 친구를 맺어보세요'
+      : '로그인해야 친구에게 공유할 수 있어요') + '</div>';
+    return;
+  }
+  list.forEach(f => {
+    const el = document.createElement('button');
+    el.className = 'fr';
+    el.style.width = '100%';
+    el.innerHTML = '<div class="n">' + esc(f.who) + '</div><div class="d">' + f.code + '</div>';
+    el.onclick = async () => {
+      try {
+        await Net.sendMail(f.code, null, '📅 ' + calShareEv.title, calShareEv.date);
+        Audio8.play('mail'); toast(f.who + ' 님에게 일정을 공유했어요'); closeOv();
+      } catch (e) { toast('공유하지 못했어요 — ' + e.message); }
+    };
+    box.appendChild(el);
+  });
 }
 function openCard() {
   $('c-title').textContent = room().who + '의 대출카드';
@@ -3144,14 +3284,32 @@ function renderWish() {
 $('wish-open').onclick = e => { e.preventDefault(); openWish(); };
 function openStack(i) { kdcFilter = KDC[i][0]; qEl.value = ''; openSearch(); }
 
-let linesBook = null;
+let linesBook = null, linesTab = 'under', reviewSort = 'pop';
 function openLines(bk) {
   linesBook = bk;
   $('w-sp').style.background = bk.col;
   $('w-title').textContent  = bk.t;
   $('w-author').textContent = bk.a;
-  renderWall(); $('u-text').value = ''; showOv('lines');
+  linesTab = 'under';
+  document.querySelectorAll('#lines-tabs .tab').forEach(t => t.classList.toggle('on', t.dataset.tab === 'under'));
+  $('under-pane').style.display = 'flex'; $('review-pane').style.display = 'none';
+  renderWall(); $('u-text').value = '';
+  $('rv-text').value = ''; $('rv-verdict').className = 'verdict';
+  renderReviews();
+  showOv('lines');
 }
+document.querySelectorAll('#lines-tabs .tab').forEach(t => t.onclick = () => {
+  linesTab = t.dataset.tab;
+  document.querySelectorAll('#lines-tabs .tab').forEach(x => x.classList.toggle('on', x === t));
+  $('under-pane').style.display = linesTab === 'under' ? 'flex' : 'none';
+  $('review-pane').style.display = linesTab === 'review' ? 'flex' : 'none';
+  if (linesTab === 'review') renderReviews();
+});
+document.querySelectorAll('#rv-sort-tabs .tab').forEach(t => t.onclick = () => {
+  reviewSort = t.dataset.sort;
+  document.querySelectorAll('#rv-sort-tabs .tab').forEach(x => x.classList.toggle('on', x === t));
+  renderReviews();
+});
 function renderWall() {
   const wall = $('w-wall');
   const list = (UNDERLINES[linesBook.t] || []).slice().sort((a, b) => b.v - a.v);
@@ -3181,6 +3339,84 @@ $('u-add').onclick = () => {
   if (!r.ok) { toast('✕ ' + r.tag + ' — ' + r.why); Audio8.play('wrong'); return; }
   (UNDERLINES[linesBook.t] = UNDERLINES[linesBook.t] || []).push({ who:'나', text:t, v:1 });
   $('u-text').value = ''; renderWall(); Audio8.play('pin'); toast('벽에 붙였어요');
+};
+
+function renderReviews() {
+  const wall = $('rv-wall');
+  const list = (REVIEWS[linesBook.t] || []).slice().sort((a, b) =>
+    reviewSort === 'pop' ? (b.up - b.down) - (a.up - a.down) : b.ts - a.ts);
+  wall.innerHTML = '';
+  if (!list.length) { wall.innerHTML = '<div class="none">아직 리뷰가 없어요<br>첫 리뷰를 남겨보세요</div>'; return; }
+  list.forEach(r => {
+    const el = document.createElement('div');
+    el.className = 'rv';
+    el.innerHTML = '<div class="txt">' + r.text + '</div>' +
+      '<div class="by"><b>' + r.who + (r.npc ? '<i class="npctag">안내</i>' : '') + '</b>' +
+      '<span>' + timeAgo(r.ts) + '</span>' +
+      '<span class="sp2">' +
+        '<button class="vote up' + (r.myVote === 'up' ? ' on' : '') + '">👍 ' + r.up + '</button>' +
+        '<button class="vote down' + (r.myVote === 'down' ? ' on' : '') + '">👎 ' + r.down + '</button>' +
+        '<button class="reply-btn">답글</button>' +
+        '<button class="flag">🚩 신고</button>' +
+      '</span></div>' +
+      (r.replies.length ? '<div class="replies">' + r.replies.map(rp =>
+        '<div class="reply"><b>' + rp.who + (rp.npc ? '<i class="npctag">안내</i>' : '') + '</b>' + rp.text + '</div>').join('') + '</div>' : '') +
+      '<div class="reply-form"><input type="text" placeholder="답글을 남겨보세요"><button>등록</button></div>';
+    el.querySelector('.vote.up').onclick = () => {
+      if (!guard()) return;
+      if (r.myVote === 'up') { r.up--; r.myVote = null; }
+      else { if (r.myVote === 'down') r.down--; r.up++; r.myVote = 'up'; }
+      renderReviews();
+    };
+    el.querySelector('.vote.down').onclick = () => {
+      if (!guard()) return;
+      if (r.myVote === 'down') { r.down--; r.myVote = null; }
+      else { if (r.myVote === 'up') r.up--; r.down++; r.myVote = 'down'; }
+      renderReviews();
+    };
+    const rf = el.querySelector('.reply-form');
+    el.querySelector('.reply-btn').onclick = () => {
+      if (!guard()) return;
+      rf.classList.toggle('show');
+      if (rf.classList.contains('show')) rf.querySelector('input').focus();
+    };
+    rf.querySelector('button').onclick = () => {
+      const inp = rf.querySelector('input'), t = inp.value.trim();
+      if (!t) return;
+      const s = scan(t);
+      if (!s.ok) { toast('✕ ' + s.tag + ' — ' + s.why); Audio8.play('wrong'); return; }
+      r.replies.push({ who:'나', text:t }); inp.value = ''; renderReviews(); Audio8.play('pin');
+    };
+    el.querySelector('.flag').onclick = () => {
+      openReport('리뷰', r.text, r.who, () => {
+        const arr = REVIEWS[linesBook.t];
+        arr.splice(arr.indexOf(r), 1); renderReviews();
+      });
+    };
+    wall.appendChild(el);
+  });
+}
+function timeAgo(ts) {
+  const m = Math.floor((Date.now() - ts) / 60000);
+  if (m < 1) return '방금'; if (m < 60) return m + '분 전';
+  const h = Math.floor(m / 60); if (h < 24) return h + '시간 전';
+  return Math.floor(h / 24) + '일 전';
+}
+$('rv-add').onclick = () => {
+  if (!guard()) return;
+  const t = $('rv-text').value.trim(), v = $('rv-verdict');
+  if (!t) { toast('리뷰 내용을 적어주세요'); return; }
+  checking(v, '비방 · 혐오 · 도배 · 광고를 살펴봅니다');
+  setTimeout(() => {
+    const r = scan(t);
+    verdict(v, r.ok ? { ok:true, how:'리뷰로 남길 수 있어요.' } : r);
+    if (r.ok) {
+      (REVIEWS[linesBook.t] = REVIEWS[linesBook.t] || []).push(
+        { id:Date.now(), who:'나', text:t, up:1, down:0, myVote:'up', replies:[], ts:Date.now() });
+      $('rv-text').value = '';
+      setTimeout(() => { renderReviews(); toast('리뷰를 남겼어요'); }, 700);
+    }
+  }, 1300);
 };
 
 let rankTab = 'loans';
@@ -3320,6 +3556,10 @@ function scan(text) {
     how:'광고로 보일 수 있어요. 링크를 왜 붙이는지 설명해주세요.' };
   if (/(계좌|입금|송금|코인|투자문의|카톡\s*아이디)/.test(t)) return { ok:false, tag:'광고·사기',
     why:'금전 거래를 유도하는 표현이 있어요.', how:'이 서비스에서는 허용되지 않습니다.' };
+  if (/01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}/.test(t) || /\d{6}[-.\s]?\d{7}/.test(t) ||
+      /[\w.-]+@[\w.-]+\.\w{2,}/.test(t))
+    return { ok:false, tag:'개인정보', why:'전화번호·주민번호·이메일처럼 보이는 정보가 들어 있어요.',
+      how:'다른 사람이 볼 수 있는 곳이라, 개인정보는 남기지 말아주세요.' };
   return { ok:true };
 }
 function moderate(title, body) {
@@ -3445,33 +3685,71 @@ function setEdit(on) {
   editbar.classList.toggle('on', edit);
   view.classList.toggle('edit', edit);
   if (!edit) { drag = null; sel = null; }
+  if (edit) editHistory = [];                     // 새로 꾸미기를 시작하면 되돌리기 기록도 새로
   $('e-del').disabled = true;
+  $('e-undo').disabled = !editHistory.length;
 }
 $('e-done').onclick = () => setEdit(false);
+
+// 되돌리기 — 방을 건드리는 동작 전에 지금 상태를 찍어둔다
+let editHistory = [];
+function pushHistory() {
+  editHistory.push(JSON.stringify({
+    items: ROOMS[0].items, wall: ROOMS[0].wall, floor: ROOMS[0].floor,
+    wood: ROOMS[0].wood, rug: ROOMS[0].rug, portal: ROOMS[0].portal,
+  }));
+  if (editHistory.length > 20) editHistory.shift();
+  $('e-undo').disabled = false;
+}
+$('e-undo').onclick = () => {
+  if (!editHistory.length) { toast('되돌릴 작업이 없어요'); return; }
+  const snap = JSON.parse(editHistory.pop());
+  Object.assign(ROOMS[0], snap);
+  $('col-wall').value = ROOMS[0].wall; $('col-floor').value = ROOMS[0].floor;
+  $('col-wood').value = ROOMS[0].wood; $('col-rug').value = ROOMS[0].rug;
+  sel = null; drag = null; $('e-del').disabled = true;
+  $('e-undo').disabled = !editHistory.length;
+  layoutRoom(ROOMS[0]); renderStats(); Audio8.play('page');
+  toast('되돌렸어요 (' + editHistory.length + '번 더 되돌릴 수 있어요)');
+};
 // 방 색 — 벽 · 바닥 · 가구 · 러그를 직접 고른다
 const ROOM_DEFAULT = { wall:ROOMS[0].wall, floor:ROOMS[0].floor, wood:ROOMS[0].wood, rug:ROOMS[0].rug };
 [['col-wall','wall'], ['col-floor','floor'], ['col-wood','wood'], ['col-rug','rug']]
   .forEach(([id, key]) => {
     const el = $(id);
     el.value = ROOMS[0][key];
-    el.addEventListener('input', e => { ROOMS[0][key] = e.target.value; });
+    let pushedForThisDrag = false;
+    el.addEventListener('input', e => {
+      if (!pushedForThisDrag) { pushHistory(); pushedForThisDrag = true; }
+      ROOMS[0][key] = e.target.value;
+    });
+    el.addEventListener('change', () => { pushedForThisDrag = false; });
   });
 $('col-reset').onclick = () => {
+  pushHistory();
   Object.assign(ROOMS[0], ROOM_DEFAULT);
   $('col-wall').value = ROOM_DEFAULT.wall; $('col-floor').value = ROOM_DEFAULT.floor;
   $('col-wood').value = ROOM_DEFAULT.wood; $('col-rug').value = ROOM_DEFAULT.rug;
   toast('방 색을 처음으로 되돌렸어요');
 };
-$('e-shelf').onclick = () => { ROOMS[0].items.push(shelf(120, 12, 52, 52, [])); layoutRoom(ROOMS[0]);
+$('e-shelf').onclick = () => { pushHistory(); ROOMS[0].items.push(shelf(120, 12, 52, 52, [])); layoutRoom(ROOMS[0]);
   Audio8.play('select'); toast('책장을 놓았어요 · 끌어서 자리를 잡으세요'); };
-$('e-plant').onclick = () => { ROOMS[0].items.push(item({ kind:'plant', x:140, y:108, w:10, h:16 }));
+$('e-plant').onclick = () => { pushHistory(); ROOMS[0].items.push(item({ kind:'plant', x:140, y:108, w:10, h:16 }));
   Audio8.play('select'); toast('화분을 놓았어요'); };
+$('e-firestyle').onclick = () => {
+  const fp = sel && sel.kind === 'fireplace' ? sel : ROOMS[0].items.find(it => it.kind === 'fireplace');
+  if (!fp) { toast('방에 벽난로가 없어요'); return; }
+  pushHistory();
+  fp.style = ((fp.style || 0) + 1) % Art.FIREPLACE_STYLES.length;
+  Audio8.play('select'); toast('벽난로 스타일 ' + (fp.style + 1) + ' / ' + Art.FIREPLACE_STYLES.length);
+};
 $('e-poster').onchange = e => {
   const f = e.target.files[0]; if (!f) return;
   const rd = new FileReader();
   rd.onload = () => {
     const img = new Image();
     img.onload = () => {
+      pushHistory();
       ROOMS[0].items.push(poster(150, 12, Art.pixelateImage(img, 20, 26),
         f.name.replace(/\.[^.]+$/, ''), '올린 사진을 20×26 도트로 바꿨어요 · 원본이 뜹니다', rd.result));
       Audio8.play('pin'); toast('포스터를 붙였어요 · 끌어서 자리를 잡으세요');
@@ -3482,7 +3760,8 @@ $('e-poster').onchange = e => {
 };
 $('e-del').onclick = () => {
   if (!sel) return;
-  if (sel.kind === 'shelf' && sel.books.length) { toast('책이 꽂혀 있어요. 책을 먼저 빼주세요'); return; }
+  if (SURFACE_KINDS.includes(sel.kind) && sel.books.length) { toast('책이 놓여 있어요. 책을 먼저 빼주세요'); return; }
+  pushHistory();
   ROOMS[0].items.splice(ROOMS[0].items.indexOf(sel), 1);
   sel = null; $('e-del').disabled = true; toast('치웠어요');
 };
@@ -3503,9 +3782,20 @@ const toWorld = e => {
 // 마우스로 끌 때 · 손가락으로 끌 때가 같은 자리를 짚게 — 하나로 합쳐서 쓴다
 function editDragStart(p) {
   const R = ROOMS[0];
+  if (sel && R.items.includes(sel) && resizeGripHit(sel, p)) {
+    pushHistory();
+    drag = { what:'resize', it:sel, w0:sel.w, h0:sel.h, x0:p.x, y0:p.y };
+    view.classList.add('dragging'); return;
+  }
+  { const pp = portalOf(R);
+    if (Math.hypot(p.x - pp.x, p.y - pp.y) < pp.rx + 4) {
+      pushHistory();
+      drag = { what:'portal' }; view.classList.add('dragging'); return;
+    } }
   for (const s of shelves(R)) for (const bk of s.books) {
     if (bk.bx === undefined) continue;
     if (p.x >= bk.bx - 1 && p.x <= bk.bx + bk.w + 1 && p.y >= bk.by - 2 && p.y <= bk.by + bk.h + 2) {
+      pushHistory();
       drag = { what:'book', bk, s, x:p.x, y:p.y }; view.classList.add('dragging'); return;
     }
   }
@@ -3513,6 +3803,7 @@ function editDragStart(p) {
     const it = R.items[i];
     if (p.x >= it.x - 2 && p.x <= it.x + it.w + 2 && p.y >= it.y - 2 && p.y <= it.y + it.h + 2) {
       sel = it; $('e-del').disabled = false;
+      pushHistory();
       drag = { what:'item', it, dx:p.x - it.x, dy:p.y - it.y };
       view.classList.add('dragging'); return;
     }
@@ -3522,11 +3813,25 @@ function editDragStart(p) {
 function editDragMove(p) {
   if (!drag) return;
   if (drag.what === 'book') { drag.x = p.x; drag.y = p.y; return; }
+  if (drag.what === 'portal') {
+    const R = ROOMS[0], pp = R.portal || (R.portal = { x:PORTAL.x, y:PORTAL.y, rx:PORTAL.rx, ry:PORTAL.ry });
+    pp.x = Math.round(Math.max(WALL_T + pp.rx + 2, Math.min(ROOM_W - WALL_T - pp.rx - 2, p.x)));
+    pp.y = Math.round(Math.max(RT + pp.ry, Math.min(H - pp.ry - 2, p.y)));
+    return;
+  }
+  if (drag.what === 'resize') {
+    const it = drag.it;
+    it.w = Math.round(Math.max(16, Math.min(ROOM_W - it.x - 2, drag.w0 + (p.x - drag.x0))));
+    it.h = Math.round(Math.max(12, Math.min(120, drag.h0 + (p.y - drag.y0))));
+    if (SURFACE_KINDS.includes(it.kind)) layoutShelf(it);
+    return;
+  }
   const it = drag.it;
-  it.x = Math.round(Math.max(2, Math.min(ROOM_W - it.w - 2, p.x - drag.dx)));
-  const onFloor = ['rug', 'plant'].includes(it.kind);
+  const onFloor = ['rug', 'plant', 'table', 'sofa'].includes(it.kind);
+  const xMin = onFloor ? WALL_T + 2 : 2, xMax = onFloor ? ROOM_W - WALL_T - it.w - 2 : ROOM_W - it.w - 2;
+  it.x = Math.round(Math.max(xMin, Math.min(xMax, p.x - drag.dx)));
   it.y = Math.round(Math.max(onFloor ? RT : 2, Math.min(onFloor ? H - it.h - 4 : RT - it.h - 6, p.y - drag.dy)));
-  if (it.kind === 'shelf') layoutShelf(it);
+  if (SURFACE_KINDS.includes(it.kind)) layoutShelf(it);
 }
 function editDragEnd() {
   if (drag && drag.what === 'book') {
@@ -3547,6 +3852,8 @@ function editDragEnd() {
       tgt.books.splice(to, 0, drag.bk);
       layoutRoom(R); renderStats(); Audio8.play('book');
     }
+  } else if (drag && (drag.what === 'portal' || drag.what === 'item' || drag.what === 'resize')) {
+    syncRoom();
   }
   drag = null; view.classList.remove('dragging');
 }
@@ -3610,6 +3917,55 @@ function renderStats() {
   $('s-books').textContent  = allBooks(ROOMS[0]).length;
   $('s-borrow').textContent = borrowed.size;
   syncRoom();                       // 방이 바뀌면 조용히 서버에 올린다
+}
+$('stats').onclick = () => openShelf();
+function openShelf() {
+  shelfFilter = null;
+  renderShelfChips(); renderShelf();
+  showOv('shelf');
+}
+function renderShelfChips() {
+  const box = $('shelf-chips'); box.innerHTML = '';
+  const mk = (label, val) => {
+    const c = document.createElement('div');
+    c.className = 'chip' + (shelfFilter === val ? ' on' : '');
+    c.textContent = label;
+    c.onclick = () => { shelfFilter = val; renderShelfChips(); renderShelf(); };
+    box.appendChild(c);
+  };
+  mk('전체', null);
+  SHELF_CATS.forEach(c => mk(c, c));
+  mk('미분류', '__none__');
+  const add = document.createElement('div');
+  add.className = 'chip'; add.textContent = '+ 분류 추가';
+  add.onclick = () => {
+    const name = prompt('새 분류 이름을 입력하세요');
+    if (!name || !name.trim()) return;
+    const n = name.trim();
+    if (!SHELF_CATS.includes(n)) SHELF_CATS.push(n);
+    renderShelfChips();
+  };
+  box.appendChild(add);
+}
+function renderShelf() {
+  const box = $('shelf-list');
+  const mine = allBooks(ROOMS[0]);
+  const list = mine.filter(b =>
+    !shelfFilter ? true : shelfFilter === '__none__' ? !b.cat : b.cat === shelfFilter);
+  box.innerHTML = '';
+  if (!list.length) { box.innerHTML = '<div class="none">이 분류에는 책이 없어요</div>'; return; }
+  list.forEach(bk => {
+    const el = document.createElement('div');
+    el.className = 'wrow';
+    el.innerHTML = '<span class="sp" style="background:' + bk.col + '"></span>' +
+      '<span><span class="t">' + bk.t + '</span><span class="a">' + bk.a + '</span></span>' +
+      '<select class="shelf-cat"><option value="">미분류</option>' +
+        SHELF_CATS.map(c => '<option value="' + c + '"' + (bk.cat === c ? ' selected' : '') + '>' + c + '</option>').join('') +
+      '</select>';
+    el.querySelector('.shelf-cat').onchange = e => { bk.cat = e.target.value || null; renderShelf(); };
+    el.querySelector('span:nth-child(2)').onclick = () => { closeOv(); openBook(bk); };
+    box.appendChild(el);
+  });
 }
 function renderFlights(now) {
   const el = $('flights'); el.innerHTML = '';
@@ -3765,11 +4121,22 @@ function arrow(x, y, t) {
   px(x, y - bob, 3, 2, '#FFD98A'); px(x + 1, y + 2 - bob, 1, 2, '#FFD98A');
   px(x, y + 4 - bob, 3, 1, '#8A6A2A');
 }
+const RESIZABLE = ['shelf', 'table', 'sofa', 'rug', 'frame', 'window', 'poster'];
 function selBox(it) {
   ctx.fillStyle = 'rgba(122,95,168,.6)';
   const x = it.x - 2, y = it.y - 2, w = it.w + 4, h = it.h + 4;
   for (let i = 0; i < w; i += 2) { ctx.fillRect(x + i, y, 1, 1); ctx.fillRect(x + i, y + h - 1, 1, 1); }
   for (let i = 0; i < h; i += 2) { ctx.fillRect(x, y + i, 1, 1); ctx.fillRect(x + w - 1, y + i, 1, 1); }
+  if (RESIZABLE.includes(it.kind)) {
+    ctx.fillStyle = '#7A5FA8';
+    ctx.fillRect(it.x + it.w - 3, it.y + it.h - 3, 6, 6);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+    ctx.strokeRect(it.x + it.w - 3, it.y + it.h - 3, 6, 6);
+  }
+}
+function resizeGripHit(it, p) {
+  return RESIZABLE.includes(it.kind) &&
+    p.x >= it.x + it.w - 6 && p.x <= it.x + it.w + 4 && p.y >= it.y + it.h - 6 && p.y <= it.y + it.h + 4;
 }
 const isF = (type, key, val) => focus && focus.type === type && (key === undefined || focus[key] === val);
 
@@ -4255,6 +4622,19 @@ function shellRoom(R, wide) {
   const fg = ctx.createLinearGradient(0, RT, 0, H);
   fg.addColorStop(0, 'rgba(40,30,20,.1)'); fg.addColorStop(.55, 'rgba(0,0,0,0)'); fg.addColorStop(1, 'rgba(255,240,210,.07)');
   ctx.fillStyle = fg; ctx.fillRect(0, RT, ww, H - RT);
+
+  // 방(내 방·남의 방)만 옆벽까지 그린다 — 한쪽 벽만 있던 것에서 진짜 '방 모양'으로
+  if (!wide) {
+    const sideCol = shade(R.wall, .78);
+    [0, ww - WALL_T].forEach(sx => {
+      px(sx, 0, WALL_T, H, sideCol);
+      for (let y = 0; y < H; y += 8) px(sx, y, WALL_T, 1, shade(sideCol, 1.15));
+      px(sx, baseY, WALL_T, baseH, baseCol);
+    });
+    // 옆벽이 바닥과 만나는 모서리 — 살짝 그늘을 줘서 방에 깊이감을 준다
+    ctx.fillStyle = 'rgba(30,22,14,.16)';
+    ctx.fillRect(WALL_T, RT, 5, H - RT); ctx.fillRect(ww - WALL_T - 5, RT, 5, H - RT);
+  }
 }
 function drawBookSpine(bk) {
   px(bk.bx, bk.by, bk.w, bk.h, bk.col);
@@ -4264,16 +4644,45 @@ function drawBookSpine(bk) {
   if (bk.from) px(bk.bx, bk.by + bk.h - 2, bk.w, 1, '#8FD4E8');
   if (bk.done) px(bk.bx + 1, bk.by + 1, bk.w - 2, 1, '#FFE08A');
 }
+// 불꽃 색으로 강제 도트화된 픽셀만 잿빛으로 바꿔치기해 "꺼진" 그림을 한 번만 만들어 캐시한다
+const FIRE_PX = new Set(['#e8442c', '#f2a24a', '#ffe08a']);
+function unlitArt(art) {
+  if (!art._unlit) art._unlit = { w:art.w, h:art.h,
+    px: art.px.map(c => FIRE_PX.has(c) ? '#1c1310' : c) };
+  return art._unlit;
+}
+function drawBooksOn(it, t) {
+  for (const bk of it.books) {
+    if (bk.bx === undefined || (drag && drag.what === 'book' && drag.bk === bk)) continue;
+    const on = !edit && focus && focus.type === 'book' && focus.book === bk;
+    if (on) { ctx.fillStyle = GLOW; ctx.fillRect(bk.bx - 3, bk.by - 3, bk.w + 6, bk.h + 5); }
+    drawBookSpine(bk);
+    if (on) { px(bk.bx, bk.by - 2, bk.w, 2, 'rgba(255,255,255,.4)'); arrow(bk.bx + (bk.w >> 1) - 1, bk.by - 7, t); }
+  }
+}
 function drawItem(R, it, t) {
   const wood = R.wood, woodDark = shade(wood, .68);
   switch (it.kind) {
     case 'rug':
-      px(it.x, it.y, it.w, it.h, R.rug);
-      px(it.x + 5, it.y + 4, it.w - 10, it.h - 8, shade(R.rug, 1.18));
-      px(it.x + 14, it.y + 10, it.w - 28, it.h - 20, R.rug); break;
+      if (it.round) {
+        const cx = it.x + it.w / 2, cy = it.y + it.h / 2;
+        ctx.fillStyle = R.rug;
+        ctx.beginPath(); ctx.ellipse(cx, cy, it.w / 2, it.h / 2, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = shade(R.rug, 1.18);
+        ctx.beginPath(); ctx.ellipse(cx, cy, it.w / 2 - 5, it.h / 2 - 4, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = R.rug;
+        ctx.beginPath(); ctx.ellipse(cx, cy, Math.max(1, it.w / 2 - 12), Math.max(1, it.h / 2 - 9), 0, 0, Math.PI * 2); ctx.fill();
+      } else {
+        px(it.x, it.y, it.w, it.h, R.rug);
+        px(it.x + 5, it.y + 4, it.w - 10, it.h - 8, shade(R.rug, 1.18));
+        px(it.x + 14, it.y + 10, it.w - 28, it.h - 20, R.rug);
+      }
+      break;
     case 'window': {
-      px(it.x, it.y, it.w, it.h, '#6E5236');
-      const gx = it.x + 3, gy = it.y + 3, gw = it.w - 6, gh = it.h - 6;
+      const useArt = it.w === Art.WINDOW_ART.w && it.h === Art.WINDOW_ART.h;
+      if (!useArt) px(it.x, it.y, it.w, it.h, '#6E5236');
+      const gx = it.x + (useArt ? 5 : 3), gy = it.y + (useArt ? 5 : 3),
+            gw = it.w - (useArt ? 10 : 6), gh = it.h - (useArt ? 10 : 6);
       const night = WEATHER.night, dusk = WEATHER.dusk;
       ctx.save(); ctx.beginPath(); ctx.rect(gx, gy, gw, gh); ctx.clip();
       // 하늘 — 계절 하늘색을 바탕으로, 밤/노을이면 그쪽 색으로
@@ -4298,17 +4707,21 @@ function drawItem(R, it, t) {
       if (WEATHER.snow) for (let i = 0; i < 5; i++)
         px(gx + 2 + ((i * 8 + 2) % (gw - 4)), gy + ((i * 13) % gh), 1, 1, 'rgba(255,255,255,.9)');
       ctx.restore();
-      px(gx + 2, gy, 1, gh, 'rgba(255,255,255,.14)');
-      px(it.x + Math.round(it.w / 2) - 1, it.y + 3, 2, it.h - 6, '#6E5236');
-      px(it.x + 3, it.y + Math.round(it.h / 2) - 1, it.w - 6, 2, '#6E5236');
-      // 커튼 — 옆에 다른 소품이 붙어 있어도 안 겹치게, 창틀 안쪽에서 양옆으로 묶어 올린 모양
-      const curt = shade(R.rug || '#B4645C', .95), cw = Math.max(3, Math.round(it.w * .24));
-      [it.x + 1, it.x + it.w - cw - 1].forEach(cx => {
-        px(cx, it.y + 1, cw, it.h - 2, curt);
-        px(cx, it.y + 1, 1, it.h - 2, shade(curt, 1.3));
-        px(cx + cw - 1, it.y + 1, 1, it.h - 2, shade(curt, .7));
-        px(cx, it.y + it.h - 5, cw, 2, shade(curt, .7));                            // 묶은 자리
-      });
+      if (useArt) {
+        Art.drawArt(Art.WINDOW_ART, it.x, it.y);          // AI 창틀 — 안쪽 4칸은 투명해서 날씨 장면이 그대로 비친다
+      } else {
+        px(gx + 2, gy, 1, gh, 'rgba(255,255,255,.14)');
+        px(it.x + Math.round(it.w / 2) - 1, it.y + 3, 2, it.h - 6, '#6E5236');
+        px(it.x + 3, it.y + Math.round(it.h / 2) - 1, it.w - 6, 2, '#6E5236');
+        // 커튼 — 옆에 다른 소품이 붙어 있어도 안 겹치게, 창틀 안쪽에서 양옆으로 묶어 올린 모양
+        const curt = shade(R.rug || '#B4645C', .95), cw = Math.max(3, Math.round(it.w * .24));
+        [it.x + 1, it.x + it.w - cw - 1].forEach(cx => {
+          px(cx, it.y + 1, cw, it.h - 2, curt);
+          px(cx, it.y + 1, 1, it.h - 2, shade(curt, 1.3));
+          px(cx + cw - 1, it.y + 1, 1, it.h - 2, shade(curt, .7));
+          px(cx, it.y + it.h - 5, cw, 2, shade(curt, .7));                            // 묶은 자리
+        });
+      }
       px(it.x - 6, RT, it.w + 12, H - RT, 'rgba(255,246,200,.13)'); break;
     }
     case 'frame':
@@ -4380,21 +4793,78 @@ function drawItem(R, it, t) {
       break;
     }
     case 'shelf': {
-      px(it.x - 2, it.y - 2, it.w + 4, it.h + 4, woodDark);
-      px(it.x, it.y, it.w, it.h, shade(R.wall, .72));
-      if (edit) { ctx.fillStyle = 'rgba(122,95,168,.12)';
-                  (it.boards || boardsOf(it)).forEach(by => ctx.fillRect(it.x, by - 16, it.w, 16)); }
-      for (const bk of it.books) {
-        if (bk.bx === undefined || (drag && drag.what === 'book' && drag.bk === bk)) continue;
-        const on = !edit && focus && focus.type === 'book' && focus.book === bk;
-        if (on) { ctx.fillStyle = GLOW; ctx.fillRect(bk.bx - 3, bk.by - 3, bk.w + 6, bk.h + 5); }
-        drawBookSpine(bk);
-        if (on) { px(bk.bx, bk.by - 2, bk.w, 2, 'rgba(255,255,255,.4)'); arrow(bk.bx + (bk.w >> 1) - 1, bk.by - 7, t); }
+      // 기본 책장 크기(94×56)는 AI 생성 + 사이트 팔레트 도트화 자산을 쓴다 — 그 외 크기는 코드로 그린다
+      if (it.w === Art.SHELF_ART.w && it.h === Art.SHELF_ART.h) {
+        Art.drawArt(Art.SHELF_ART, it.x, it.y);
+        if (edit) { ctx.fillStyle = 'rgba(122,95,168,.12)';
+                    (it.boards || boardsOf(it)).forEach(by => ctx.fillRect(it.x, by - 16, it.w, 16)); }
+        drawBooksOn(it, t);
+      } else {
+        px(it.x - 2, it.y - 2, it.w + 4, it.h + 4, woodDark);
+        px(it.x, it.y, it.w, it.h, shade(R.wall, .72));
+        if (edit) { ctx.fillStyle = 'rgba(122,95,168,.12)';
+                    (it.boards || boardsOf(it)).forEach(by => ctx.fillRect(it.x, by - 16, it.w, 16)); }
+        drawBooksOn(it, t);
+        ctx.fillStyle = wood;
+        (it.boards || boardsOf(it)).forEach(by => ctx.fillRect(it.x, by, it.w, 2));
+        px(it.x - 2, it.y - 2, 2, it.h + 4, woodDark);
+        px(it.x + it.w, it.y - 2, 2, it.h + 4, woodDark);
       }
-      ctx.fillStyle = wood;
-      (it.boards || boardsOf(it)).forEach(by => ctx.fillRect(it.x, by, it.w, 2));
-      px(it.x - 2, it.y - 2, 2, it.h + 4, woodDark);
-      px(it.x + it.w, it.y - 2, 2, it.h + 4, woodDark);
+      break;
+    }
+    case 'table': {
+      if (it.w === Art.TABLE_ART.w && it.h === Art.TABLE_ART.h) {
+        Art.drawArt(Art.TABLE_ART, it.x, it.y);
+      } else {
+        const legW = 3, legIn = 3;
+        px(it.x - 1, it.y + it.h - 2, it.w + 2, 3, 'rgba(0,0,0,.16)');        // 바닥 그림자
+        px(it.x + legIn, it.y + 7, legW, it.h - 7, woodDark);                 // 다리 둘
+        px(it.x + it.w - legIn - legW, it.y + 7, legW, it.h - 7, woodDark);
+        px(it.x, it.y, it.w, 8, wood);                                       // 상판
+        px(it.x, it.y, it.w, 2, shade(wood, 1.3));
+        px(it.x, it.y + 7, it.w, 1, woodDark);
+        for (let gx = it.x + 4; gx < it.x + it.w - 3; gx += 6) px(gx, it.y + 2, 1, 4, shade(wood, .82));  // 나뭇결
+      }
+      drawBooksOn(it, t);
+      break;
+    }
+    case 'sofa': {
+      if (it.w === Art.SOFA_ART.w && it.h === Art.SOFA_ART.h) {
+        Art.drawArt(Art.SOFA_ART, it.x, it.y);
+      } else {
+        const c = R.rug || '#B4645C', dark = shade(c, .78);
+        px(it.x - 1, it.y + it.h - 2, it.w + 2, 3, 'rgba(0,0,0,.16)');        // 바닥 그림자
+        px(it.x + 2, it.y + it.h - 9, 4, 9, woodDark); px(it.x + it.w - 6, it.y + it.h - 9, 4, 9, woodDark); // 다리
+        px(it.x, it.y + 9, it.w, it.h - 13, shade(c, .95));                  // 몸체(방석)
+        px(it.x, it.y + 3, 8, it.h - 10, shade(c, 1.05));                    // 팔걸이 둘
+        px(it.x + it.w - 8, it.y + 3, 8, it.h - 10, shade(c, 1.05));
+        px(it.x + 6, it.y, it.w - 12, 11, shade(c, 1.1));                    // 등받이
+        px(it.x + 6, it.y, it.w - 12, 2, shade(c, 1.35));
+        px(it.x + it.w / 2 - 1, it.y + 9, 2, it.h - 13, dark);               // 쿠션 솔기
+        px(it.x + 9, it.y + 11, it.w - 18, 1, dark);
+      }
+      drawBooksOn(it, t);
+      break;
+    }
+    case 'fireplace': {
+      // AI 이미지를 사이트 팔레트로 강제 도트화한 자산 위에, 은은한 불빛과 흔들리는 불꽃만 코드로 얹는다.
+      // 끄면 어둡게 덮는 대신, 그림 속 불꽃 색만 골라 꺼진 잿빛으로 실제로 바꿔치기한다.
+      const base = Art.FIREPLACE_STYLES[it.style || 0];
+      const art = it.lit ? base : unlitArt(base);
+      const cx = it.x + it.w / 2, cy = it.y + it.h - 12;
+      if (it.lit) {
+        const gr = it.w * 1.15;
+        const glow = ctx.createRadialGradient(cx, cy, 2, cx, cy, gr);
+        glow.addColorStop(0, 'rgba(255,150,70,.30)'); glow.addColorStop(1, 'rgba(255,150,70,0)');
+        ctx.fillStyle = glow; ctx.fillRect(cx - gr, cy - gr, gr * 2, gr * 2);
+      }
+      Art.drawArt(art, it.x, it.y);
+      if (it.lit) {
+        const flick = Math.sin(t / 140) * .8, flick2 = Math.cos(t / 190) * .6;
+        blob(cx - 1 + flick * .5, cy - 2, 2.4, '#F7C25A');
+        px(cx - 1 + flick * .3, cy - 6, 1, 3, '#FFE9A0');
+        blob(cx + 2 + flick2 * .4, cy - 1, 1.6, '#F2A24A');
+      }
       break;
     }
   }
@@ -4413,36 +4883,42 @@ function drawDoorIndoor(wood, D, on, t) {
   if (on) { ctx.fillStyle = GLOW; ctx.fillRect(D.x - 4, D.y - 14, D.w + 8, D.h + 16);
             arrow(D.x + D.w / 2 - 1, D.y - 19, t); }
 }
-// 손님 문 — 나가는 문과 생김새를 다르게. 아치에 놋쇠 문패와 초인종.
-function drawVisitDoor(R, on, t) {
-  const D = VDOOR, wood = R.wood, dark = shade(wood, .62);
-  if (on) { ctx.fillStyle = GLOW; ctx.fillRect(D.x - 6, D.y - 12, D.w + 12, D.h + 16); }
-  for (let i = 0; i < 7; i++)                                  // 아치
-    px(D.x + 2 + i, D.y - 7 + i, D.w - 4 - i * 2, 2, dark);
-  px(D.x - 3, D.y, D.w + 6, D.h + 2, dark);
-  px(D.x, D.y, D.w, D.h, wood);
-  px(D.x + 3, D.y + 4, D.w - 6, D.h - 8, shade(wood, .88));
-  px(D.x + D.w / 2 - 1, D.y + 4, 2, D.h - 8, dark);            // 두 짝
-  for (let i = 0; i < 4; i++) {                                 // 격자 유리
-    px(D.x + 5 + (i % 2) * (D.w / 2 - 2), D.y + 8 + Math.floor(i / 2) * 14, 11, 11, '#DCEAF2');
-    px(D.x + 5 + (i % 2) * (D.w / 2 - 2), D.y + 8 + Math.floor(i / 2) * 14, 11, 1, '#F2F8FC');
+// 창가 자리 — 손님 창 아래 놓인 이동진을 밟으면 다른 사람 방으로 간다.
+// 방 주인이 꾸미기 모드에서 직접 자리를 옮길 수 있다 (R.portal 이 있으면 그 자리, 없으면 기본자리).
+const portalOf = R => R.portal || PORTAL;
+function drawPortal(P, on, t) {
+  const cx = P.x, cy = P.y, rx = P.rx, ry = P.ry, pulse = 1 + Math.sin(t / 300) * .08;
+  const rot = (t / 1600) % (Math.PI * 2);
+  ctx.save();
+  const gr = rx * 1.9;
+  const glow = ctx.createRadialGradient(cx, cy, 2, cx, cy, gr);
+  glow.addColorStop(0, 'rgba(159,216,232,.30)'); glow.addColorStop(1, 'rgba(159,216,232,0)');
+  ctx.fillStyle = glow; ctx.fillRect(cx - gr, cy - gr, gr * 2, gr * 2);
+  // 바깥 원 — 점선 호를 이어 그려 돌아가는 것처럼 보이게 한다
+  const segs = 10;
+  ctx.strokeStyle = 'rgba(159,216,232,.9)'; ctx.lineWidth = 2;
+  for (let i = 0; i < segs; i++) {
+    const a0 = rot + i * (Math.PI * 2 / segs), a1 = a0 + (Math.PI * 2 / segs) * .55;
+    ctx.beginPath(); ctx.ellipse(cx, cy, rx * pulse, ry * pulse, 0, a0, a1); ctx.stroke();
   }
-  px(D.x + D.w / 2 - 4, D.y + D.h - 14, 3, 3, '#E8C46A');       // 손잡이 둘
-  px(D.x + D.w / 2 + 2, D.y + D.h - 14, 3, 3, '#E8C46A');
-  px(D.x + D.w - 6, D.y + 22, 3, 3, '#C8A85A');                 // 초인종
-  px(D.x + 4, D.y - 14, D.w - 8, 8, '#B89A5E');                 // 놋쇠 문패
-  px(D.x + 4, D.y - 14, D.w - 8, 2, '#D4BA7E');
-  ctx.fillStyle = '#6E5A32';
-  for (let i = 0; i < 4; i++) ctx.fillRect(D.x + 7 + i * 6, D.y - 11, 4, 3);
-  if (on) arrow(D.x + D.w / 2 - 1, D.y - 22, t);
+  // 안쪽 원 — 반대로 돈다
+  ctx.strokeStyle = 'rgba(200,236,244,.7)'; ctx.lineWidth = 1.3;
+  ctx.beginPath(); ctx.ellipse(cx, cy, rx * .55, ry * .55, 0, -rot * 1.5, -rot * 1.5 + Math.PI * 1.5); ctx.stroke();
+  // 반짝이는 점 넷
+  for (let i = 0; i < 4; i++) {
+    const a = rot * .7 + i * (Math.PI / 2);
+    px(cx + Math.cos(a) * rx * .82 - .5, cy + Math.sin(a) * ry * .82 - .5, 1, 1, '#EAF8FC');
+  }
+  ctx.restore();
+  if (on) arrow(cx - 1, cy - ry - 11, t);
 }
 
 function drawRoom(R, t) {
   shellRoom(R);
-  const order = { rug:0, window:1, frame:1, poster:1, card:1, perch:1, shelf:2, lamp:3, plant:4 };
+  drawPortal(portalOf(R), isF('visit'), t);
+  const order = { rug:0, window:1, frame:1, poster:1, card:1, perch:1, shelf:2, table:2, sofa:2, lamp:3, plant:4, fireplace:1 };
   R.items.slice().sort((a, b) => (order[a.kind] ?? 2) - (order[b.kind] ?? 2)).forEach(it => drawItem(R, it, t));
   drawDoorIndoor(R.wood, DOOR, isF('out'), t);
-  drawVisitDoor(R, isF('visit'), t);
   if (drag && drag.what === 'book') {
     const bk = drag.bk, sx = bk.bx, sy = bk.by;
     bk.bx = Math.round(drag.x - bk.w / 2); bk.by = Math.round(drag.y - bk.h / 2);
@@ -4780,12 +5256,17 @@ function drawFlyFx(dt) {
 
 // ── 충돌 ──────────────────────────────────────────────────────
 function solids() {
-  if (!inTown()) return [];
-  const out = [POND, { x:BUS.x + 6, y:BUS.y + 2, w:BUS.w - 12, h:10 }];
-  [BLD.lib, BLD.used, BLD.post, BLD.train, BLD.air].forEach(b =>
-    out.push({ x:b.x - 4, y:b.y - 14, w:b.w + 8, h:b.h + 12 }));
-  town().houses.forEach(h => out.push({ x:h.x - 4, y:h.y - 14, w:h.w + 8, h:h.h + 12 }));
-  return out;
+  if (inTown()) {
+    const out = [POND, { x:BUS.x + 6, y:BUS.y + 2, w:BUS.w - 12, h:10 }];
+    [BLD.lib, BLD.used, BLD.post, BLD.train, BLD.air].forEach(b =>
+      out.push({ x:b.x - 4, y:b.y - 14, w:b.w + 8, h:b.h + 12 }));
+    town().houses.forEach(h => out.push({ x:h.x - 4, y:h.y - 14, w:h.w + 8, h:h.h + 12 }));
+    return out;
+  }
+  // 방바닥에 놓인 테이블·소파 — 앞쪽 절반만 막아서, 뒤로는 지나갈 수 있게 한다
+  if (inRoom()) return room().items.filter(it => ['table', 'sofa'].includes(it.kind))
+    .map(it => ({ x:it.x, y:it.y + it.h * .5, w:it.w, h:it.h * .5 }));
+  return [];
 }
 function blocked(fx, fy) {
   for (const s of solids())
@@ -4808,10 +5289,16 @@ function loop(t) {
   }
   requestAnimationFrame(loop);
 }
+let fireSoundOn = false;
+function updateFireSound() {
+  const should = inRoom() && room().items.some(it => it.kind === 'fireplace' && it.lit);
+  if (should !== fireSoundOn) { fireSoundOn = should; Audio8.fireLoop(should); }
+}
 function frame(t) {
   frames++;
   const dt = Math.min(50, t - last); last = t;
   const wd = world();
+  updateFireSound();
 
   // 걷기 — 키보드와 클릭 목표를 같은 길로 처리한다
   let dx = 0, dy = 0;
@@ -4860,7 +5347,8 @@ function frame(t) {
     } else player.anim = 0;
   }
 
-  player.x = Math.max(PAD, Math.min(wd.w - 10 - PAD, player.x));
+  const xPad = inRoom() ? WALL_T + 2 : PAD;
+  player.x = Math.max(xPad, Math.min(wd.w - 10 - xPad, player.x));
   player.y = inTown() ? Math.max(8, Math.min(TOWN.h - 16, player.y))
            : inRide() ? Math.max(RT + 22, Math.min(H - 16, player.y))
            : Math.max(RT - 8, Math.min(RB, player.y));
@@ -5007,6 +5495,9 @@ Gate.open(async () => {
             if (bk.from) borrowed.add(bk.t);
           }));
           wishlist.clear(); (s.wishlist || []).forEach(t => wishlist.add(t));
+          if (s.shelfCats && s.shelfCats.length) SHELF_CATS = s.shelfCats;
+          CAL_EVENTS = s.calEvents || [];
+          ROOMS[0].portal = s.portal || null;
           renderDex(); renderStats(); renderWishCount();
         }
       } catch (e) { /* 아직 저장된 방이 없는 새 계정 — 기본 방 그대로 둔다 */ }

@@ -48,9 +48,21 @@ const API = {
 // 제목·요약·링크만 보여주고 본문은 원문으로 보낸다 (저작권)
 const FEEDS = [
   { name:'연합뉴스', url:'https://www.yna.co.kr/rss/culture.xml' },
+  { name:'연합뉴스', url:'https://www.yna.co.kr/rss/economy.xml' },
   { name:'경향신문', url:'https://www.khan.co.kr/rss/rssdata/culture_news.xml' },
+  { name:'경향신문', url:'https://www.khan.co.kr/rss/rssdata/opinion_news.xml', opinion:true },
+  { name:'경향신문', url:'https://www.khan.co.kr/rss/rssdata/economy_news.xml' },
+  { name:'경향신문', url:'https://www.khan.co.kr/rss/rssdata/it_news.xml' },
   { name:'동아일보', url:'https://rss.donga.com/culture.xml' },
+  { name:'동아일보', url:'https://rss.donga.com/editorials.xml', opinion:true },
+  { name:'동아일보', url:'https://rss.donga.com/economy.xml' },
+  { name:'동아일보', url:'https://rss.donga.com/science.xml' },
   { name:'매일경제', url:'https://www.mk.co.kr/rss/30000023/' },
+  { name:'조선일보', url:'https://www.chosun.com/arc/outboundfeeds/rss/category/national/?outputType=xml' },
+  { name:'조선일보', url:'https://www.chosun.com/arc/outboundfeeds/rss/category/opinion/?outputType=xml', opinion:true },
+  { name:'조선일보', url:'https://www.chosun.com/arc/outboundfeeds/rss/category/economy/?outputType=xml' },
+  // 한겨레 — RSS가 EUC-KR로 내려와서 그대로 받으면 글자가 깨진다. 인코딩 변환 작업 필요, 보류.
+  // 중앙일보 — 예전 RSS 도메인(joinsmsn.com)이 폐쇄되어 대체 주소를 못 찾음
 ];
 
 // 남의 방에 쪽지를 남길 때 쓰는 최소한의 검열 — 클라이언트를 안 거치고 API 를
@@ -173,7 +185,7 @@ const tag = (block, name) => {
   if (!m) return '';
   return m[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').trim();
 };
-function parseRss(xml, source) {
+function parseRss(xml, source, opinion) {
   const blocks = xml.match(/<item[\s>][\s\S]*?<\/item>/gi) || [];
   return blocks.map(b => {
     const desc = clean(tag(b, 'description'));
@@ -182,7 +194,7 @@ function parseRss(xml, source) {
       summary: desc.slice(0, 220),
       link: tag(b, 'link') || (b.match(/<link[^>]*>([^<]+)/i) || [, ''])[1].trim(),
       date: tag(b, 'pubDate') || tag(b, 'dc:date'),
-      source,
+      source, opinion: !!opinion,
     };
   }).filter(x => x.title && x.link);
 }
@@ -190,14 +202,14 @@ async function loadNews() {
   const hit = cache.news;
   if (hit && Date.now() - hit.at < 1000 * 60 * 30) return hit.data;   // 30분
   const got = await Promise.allSettled(FEEDS.map(async f =>
-    parseRss(await get(f.url), f.name)));
+    parseRss(await get(f.url), f.name, f.opinion)));
   let all = [];
   got.forEach(r => { if (r.status === 'fulfilled') all = all.concat(r.value); });
   if (!all.length) throw new Error('신문을 받아오지 못했습니다');
   const seen = new Set();
   all = all.filter(a => !seen.has(a.title) && seen.add(a.title));
   all.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));   // 그냥 최신순
-  const data = all.slice(0, 60);
+  const data = all.slice(0, 150);
   cache.news = { at: Date.now(), data };
   console.log('[news] ' + data.length + '건 (' + FEEDS.length + '개 신문)');
   return data;
@@ -307,7 +319,14 @@ async function api(req, res, u) {
       if (BLOCK.some(w => text.includes(w))) { res.statusCode = 400; return send({ ok:false, reason:'남을 깎아내리는 표현이 들어 있어요' }); }
       entry = { who: (who && who.who) || '누군가', text };
     } else {
-      entry = { kind: String(b.itemKind || '').slice(0, 20), when: String(b.when || '').slice(0, 20) };
+      const note = String(b.note || '').trim().slice(0, 80);
+      if (note && BLOCK.some(w => note.includes(w))) { res.statusCode = 400; return send({ ok:false, reason:'남을 깎아내리는 표현이 들어 있어요' }); }
+      if (/01[016789][-.\s]?\d{3,4}[-.\s]?\d{4}/.test(note) || /\d{6}[-.\s]?\d{7}/.test(note) || /[\w.-]+@[\w.-]+\.\w{2,}/.test(note))
+        { res.statusCode = 400; return send({ ok:false, reason:'전화번호·이메일처럼 보이는 정보는 남길 수 없어요' }); }
+      entry = { who: (who && who.who) || '누군가', kind: String(b.itemKind || '').slice(0, 20),
+        when: String(b.when || '').slice(0, 20),
+        page: /^\d{1,4}$/.test(String(b.page || '')) ? String(b.page) : null,
+        note: note || null };
     }
     try {
       const bk = await store.leaveTrace(b.target, +b.shelfIndex || 0, String(b.bookTitle || ''), kind, entry);
@@ -325,8 +344,9 @@ async function api(req, res, u) {
     if (!text) { res.statusCode = 400; return send({ ok:false, reason:'내용이 비어 있어요' }); }
     if (BLOCK.some(w => text.includes(w))) { res.statusCode = 400; return send({ ok:false, reason:'남을 깎아내리는 표현이 들어 있어요' }); }
     const who = await store.whoAmI(b.code);
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(b.date || '') ? b.date : null;
     const letter = { from: (who && who.who) || '누군가', book: b.book ? String(b.book).slice(0, 80) : null,
-                      text, read:false, at: Date.now() };
+                      text, date, read:false, at: Date.now() };
     await store.sendLetter(b.target, letter);
     return send({ ok:true });
   }

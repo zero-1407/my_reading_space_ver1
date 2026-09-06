@@ -64,6 +64,15 @@ const UNDERLINES = {
     { who:'사서', npc:true, text:'가장 중요한 것은 눈에 보이지 않아.', v:52 }],
 };
 
+//  책마다 쌓이는 리뷰 — 밑줄(한 문장)과 달리 감상을 길게 남기고,
+//  다른 사람이 엄지척/엄지다운·대댓글을 달 수 있다.
+const REVIEWS = {
+  '데미안':[
+    { id:1, who:'사서', npc:true, text:'처음 읽었을 땐 어려웠는데, 두 번째 읽으니 문장 하나하나가 다르게 다가왔다. 나만의 알을 깨는 중이라는 생각이 들었다.',
+      up:18, down:1, myVote:null, ts:Date.now() - 86400000 * 3,
+      replies:[{ who:'사서', npc:true, text:'저도 재독할 때마다 새로운 책이에요.' }] }],
+};
+
 // ── 마을 글판 ────────────────────────────────────────────────
 //  who:'사서', npc:true 로 남긴 건 예시 글이다 — 실존 회원인 척하지 않으려고
 //  개인 이름 대신 사서 캐릭터 이름을 쓴다. 딱 두 개만 남기고, 나머지는 회원이 쓴 진짜 글로 채워진다.
@@ -208,6 +217,9 @@ const EVENTS = [
 let uid = 1;
 const item = o => Object.assign({ id: uid++ }, o);
 const shelf = (x, y, w, h, books) => item({ kind:'shelf', x, y, w, h, books: books || [] });
+//  책상·테이블·소파처럼 바닥 아무 데나 놓고 그 위에 책을 올려두는 가구 —
+//  벽에 붙는 shelf 와 달리 방 어디든 옮길 수 있다.
+const surface = (kind, x, y, w, h, books) => item({ kind, x, y, w, h, books: books || [] });
 const poster = (x, y, art, title, desc, src) =>
   item({ kind:'poster', x, y, w:art.w, h:art.h, art, title, desc, src: src || null });
 const newRoom = cfg => Object.assign({ type:'private', visitors:[], letters:[], items:[] }, cfg);
@@ -229,10 +241,17 @@ const ROOMS = [
       poster(160, 12, Art.ART_HILL, '언덕', '코드로 그린 기본 포스터'),
       poster(186, 14, Art.ART_WAVE, '파도', '코드로 그린 기본 포스터'),
       item({ kind:'lamp',  x:216, y:52, w:10, h:20 }),
-      item({ kind:'window', x:354, y:14, w:24, h:34 }),
       item({ kind:'rug',   x:112, y:98, w:68, h:30 }),
       item({ kind:'plant', x:230, y:108, w:10, h:16 }),
-      item({ kind:'journal', x:326, y:18, w:26, h:32 }),
+      // 창가 자리 — 손님 문 대신 넉넉한 창, 벽난로, 소파와 탁자로 안락하게 꾸몄다.
+      // 다른 사람 방으로 가는 자리는 이제 창문 앞 바닥의 이동진(PORTAL)이다.
+      item({ kind:'window', x:262, y:16, w:54, h:38 }),
+      item({ kind:'fireplace', x:320, y:30, w:26, h:40, lit:true }),
+      item({ kind:'journal', x:354, y:18, w:26, h:32 }),
+      surface('sofa', 261, 100, 56, 26, []),
+      item({ kind:'rug', x:249, y:98, w:80, h:30, round:true }),
+      surface('table', 322, 104, 28, 16, []),
+      item({ kind:'lamp', x:331, y:86, w:10, h:20 }),
     ] }),
 ];
 

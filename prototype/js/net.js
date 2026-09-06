@@ -100,9 +100,9 @@ const Net = (() => {
     async people() { return (await call('/api/people')).people; },
 
     // 참새 · 편지 — 실제 친구의 우편함에 진짜로 쌓인다
-    async sendMail(target, book, text) {
+    async sendMail(target, book, text, date) {
       if (!me) throw new Error('로그인해야 편지를 보낼 수 있어요');
-      return post('/api/mail', { code:me.code, token:me.token, target, book, text });
+      return post('/api/mail', { code:me.code, token:me.token, target, book, text, date });
     },
 
     // 남의 책에 진짜로 흔적을 남긴다 — 그 방 주인의 서버 데이터가 직접 바뀐다
