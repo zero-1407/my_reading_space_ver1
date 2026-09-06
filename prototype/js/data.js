@@ -229,6 +229,7 @@ const ROOMS = [
       poster(160, 12, Art.ART_HILL, '언덕', '코드로 그린 기본 포스터'),
       poster(186, 14, Art.ART_WAVE, '파도', '코드로 그린 기본 포스터'),
       item({ kind:'lamp',  x:216, y:52, w:10, h:20 }),
+      item({ kind:'window', x:354, y:14, w:24, h:34 }),
       item({ kind:'rug',   x:112, y:98, w:68, h:30 }),
       item({ kind:'plant', x:230, y:108, w:10, h:16 }),
       item({ kind:'journal', x:326, y:18, w:26, h:32 }),

@@ -107,14 +107,11 @@ function dith(x, y, w, h, c1, c2) {
   for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++)
     if ((xx + yy * 2) % 3 !== 2) px(x + xx, y + yy, 1, 1, (xx + yy) % 2 ? c1 : c2);
 }
-// 진짜 동그란 덩어리 — 사각형만 쌓아서는 절대 귀여워지지 않는다.
-// (x,y) 를 중심으로 반지름 r 인 원을 한 줄씩 채운다 (원형 브러시와 같은 방식)
+// 진짜 동그란 덩어리 — 사각형을 층층이 쌓은 원은 계단져 보인다.
+// 캔버스의 진짜 원(arc)으로 채우면, 낮은 도트 해상도에서도 가장자리가
+// 자연스럽게 섞여 계단 대신 부드러운 경계가 생긴다 (최종 화면은 그대로 도트로 확대되어도).
 function blob(cx, cy, r, c) {
-  const rr = r + .5;
-  for (let dy = -r; dy <= r; dy++) {
-    const hw = Math.floor(Math.sqrt(rr * rr - dy * dy));
-    if (hw >= 0) px(cx - hw, cy + dy, hw * 2 + 1, 1, c);
-  }
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fillStyle = c; ctx.fill();
 }
 // 꽃송이 — 동그라미 하나면 그냥 공이다. 꽃잎 5장을 돌려 붙여야 꽃이 된다
 function bloom(cx, cy, r, c) {
@@ -4135,14 +4132,38 @@ function drawItem(R, it, t) {
       px(it.x, it.y, it.w, it.h, R.rug);
       px(it.x + 5, it.y + 4, it.w - 10, it.h - 8, shade(R.rug, 1.18));
       px(it.x + 14, it.y + 10, it.w - 28, it.h - 20, R.rug); break;
-    case 'window':
+    case 'window': {
       px(it.x, it.y, it.w, it.h, '#6E5236');
-      px(it.x + 3, it.y + 3, it.w - 6, it.h - 6, '#DCF0FA');
-      px(it.x + 3, it.y + 23, it.w - 6, it.h - 26, '#B2DCF0');
-      px(it.x + 8, it.y + 8, 8, 4, '#FFFFFF');
-      px(it.x + 20, it.y + 3, 2, it.h - 6, '#6E5236');
-      px(it.x + 3, it.y + 17, it.w - 6, 2, '#6E5236');
+      const gx = it.x + 3, gy = it.y + 3, gw = it.w - 6, gh = it.h - 6;
+      const night = WEATHER.night, dusk = WEATHER.dusk;
+      ctx.save(); ctx.beginPath(); ctx.rect(gx, gy, gw, gh); ctx.clip();
+      // 하늘 — 계절 하늘색을 바탕으로, 밤/노을이면 그쪽 색으로
+      const sky = ctx.createLinearGradient(0, gy, 0, gy + gh);
+      if (night) { sky.addColorStop(0, '#1C2148'); sky.addColorStop(1, '#3E3E68'); }
+      else if (dusk) { sky.addColorStop(0, shade(SEASON.sky, .82)); sky.addColorStop(1, '#F0AE80'); }
+      else { sky.addColorStop(0, shade(SEASON.sky, 1.05)); sky.addColorStop(1, shade(SEASON.sky, .88)); }
+      ctx.fillStyle = sky; ctx.fillRect(gx, gy, gw, gh);
+      if (night) [[.12,.2],[.35,.45],[.6,.15],[.78,.5],[.9,.28]].forEach(([fx,fy]) =>
+        px(gx + gw * fx, gy + gh * fy, 1, 1, 'rgba(255,255,255,.85)'));
+      blob(gx + gw * (night ? .78 : .8), gy + gh * .22, night ? 3 : 4, night ? '#F2EBD6' : '#FFE9A0');
+      // 땅 — 계절 풀색, 나무 한 그루가 서 있다 (도트 하나짜리 마을 나무 대신 작은 blob 나무)
+      px(gx, gy + gh * .68, gw, gh * .32, shade(SEASON.grass, night ? .5 : 1));
+      const tx = gx + gw * .58, ty = gy + gh * .68;
+      px(tx - 1, ty - 8, 2, 8, '#8A6440');
+      blob(tx, ty - 11, Math.max(3, Math.round(gw * .09)), night ? shade(SEASON.leaf, .6) : SEASON.leaf);
+      if (SEASON.key === 'spring') blob(tx - 3, ty - 13, 2, SEASON.blossom);
+      if (SEASON.key === 'autumn') blob(tx + 3, ty - 9, 2, '#D9642E');
+      if (SEASON.key === 'winter') px(tx - 4, ty - 15, 8, 2, 'rgba(255,255,255,.85)');
+      if (WEATHER.rain > 0) for (let i = 0; i < 5; i++)
+        px(gx + 2 + ((i * 7 + 3) % (gw - 4)), gy + ((i * 11) % gh), 1, 3, 'rgba(210,225,240,.5)');
+      if (WEATHER.snow) for (let i = 0; i < 5; i++)
+        px(gx + 2 + ((i * 8 + 2) % (gw - 4)), gy + ((i * 13) % gh), 1, 1, 'rgba(255,255,255,.9)');
+      ctx.restore();
+      px(gx + 2, gy, 1, gh, 'rgba(255,255,255,.14)');
+      px(it.x + Math.round(it.w / 2) - 1, it.y + 3, 2, it.h - 6, '#6E5236');
+      px(it.x + 3, it.y + Math.round(it.h / 2) - 1, it.w - 6, 2, '#6E5236');
       px(it.x - 6, RT, it.w + 12, H - RT, 'rgba(255,246,200,.13)'); break;
+    }
     case 'frame':
       px(it.x, it.y, it.w, it.h, '#6E5236');
       px(it.x + 3, it.y + 3, it.w - 6, it.h - 6, shade(R.wall, 1.28));
@@ -4813,6 +4834,9 @@ Gate.open(async () => {
           // 필사대(journal)는 나중에 추가된 기본 가구라, 예전에 저장해둔 방에는 없다 — 없으면 넣어준다
           if (!ROOMS[0].items.some(it => it.kind === 'journal'))
             ROOMS[0].items.push({ id: uid++, kind:'journal', x:326, y:18, w:26, h:32 });
+          // 창문도 마찬가지 — 원래 방엔 없었다. 계절·날씨가 비치는 창을 기본으로 하나 넣어준다
+          if (!ROOMS[0].items.some(it => it.kind === 'window'))
+            ROOMS[0].items.push({ id: uid++, kind:'window', x:354, y:14, w:24, h:34 });
           if (!vidx(ROOMS[0].village)) ROOMS[0].village = VIL[0].key;
           layoutRoom(ROOMS[0]);
           // 도감(readKdc)·빌려온 책(borrowed)은 따로 저장되지 않으니, 불러온

@@ -47,7 +47,7 @@ const Expo = (() => {
       if (c) { items = c.items; state = 'cache'; note = '연결 실패 · 저장해 둔 목록을 씁니다'; }
       else {
         items = FALLBACK; state = 'fallback';
-        note = '예비 자료 — 실제 전시를 보려면 서버를 켜세요 (node server.js)';
+        note = '예비 자료 — 지금은 공공데이터 서버에 연결할 수 없어요';
       }
     }
     emit(); return items;

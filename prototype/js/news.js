@@ -59,7 +59,7 @@ const News = (() => {
     } catch (e) {
       if (c) { items = c.items; state = 'cache'; note = '연결 실패 · 받아둔 기사를 봅니다'; }
       else { items = FALLBACK.map(a => Object.assign({ cat: newsCatOf(a) }, a)); state = 'fallback';
-             note = '예비 자료 — 실제 기사를 보려면 서버를 켜세요 (node server.js)'; }
+             note = '예비 자료 — 지금은 신문 서버에 연결할 수 없어요'; }
     }
     emit(); return items;
   }
