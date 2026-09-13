@@ -78,7 +78,7 @@ const STALLS = [
 const USED_SWAP = { x:418, y:88, w:52, h:20 };       // 교환대
 const CAT = { x:352, y:80 };
 
-// 작은 가게들 안 — 우체국 · 찻집 · 박물관.
+// 작은 가게들 안 — 우체국 · 찻집.
 // 전부 이 하나의 틀(SHOP_*)을 같이 쓰고, 가게마다 색과 장식(decor)만 다르다.
 const SHOP_W = 320;
 const SHOP_DOOR = { x:10, y:18, w:34, h:52 };
@@ -180,31 +180,6 @@ const SHOPS = {
       px(px0, py0 + ph - 2, pw, 2, '#8A5A6E');
     },
   },
-  museum: {
-    title:'박물관', wall:'#F0EDE4', floor:'#C8C4B4', wood:'#8A8A96', rug:'#9A96A8',
-    staff:{ h:'#2b2b33', c:'#8A8A96' }, deskLabel:'지금 하는 전시 보기',
-    action: () => openExpo(),
-    decor(t) {
-      [[8, '#D4645C'], [40, '#4A6EB0'], [72, '#5FB0B8'], [104, '#C4965C']].forEach(([ox, c]) => {
-        px(ox, 8, 24, 20, '#3A342C'); px(ox + 2, 10, 20, 16, c);
-      });
-      shopWindow(230, 12, 40, 34);
-      // 전시대 1 — 흉상, 은은한 스포트라이트
-      px(46, 60, 28, 40, 'rgba(255,250,220,.1)');
-      px(50, 80, 20, 22, '#B4B0A2'); px(50, 78, 20, 3, '#8A8676');
-      px(56, 72, 8, 6, '#8A8A96'); blob(60, 66, 6, '#9A96A8'); blob(58, 63, 2, '#AAA6B4');
-      // 전시대 2 — 도자기 항아리
-      px(96, 62, 28, 40, 'rgba(255,250,220,.08)');
-      potShape(100, 82, 20, 20, '#B0703E'); px(100, 80, 20, 3, shade('#B0703E', 1.25));
-      blob(110, 78, 3, shade('#B0703E', 1.35));
-      px(96, 100, 28, 2, 'rgba(60,42,24,.14)');
-      // 로프 기둥 — 전시대 앞 관람 경계
-      [[38, 104], [128, 104]].forEach(([x, y]) => {
-        px(x, y - 16, 3, 16, '#8A6444'); blob(x + 1, y - 16, 3, '#C4A052');
-      });
-      px(41, 92, 84, 2, '#8A2E2E');
-    },
-  },
 };
 
 // ── 마을 건물 배치 (모든 마을이 같은 틀) ──────────────────────
@@ -214,7 +189,6 @@ const BLD = {
   used:  { x:44,  y:70,  w:112, h:78,  name:'헌책방', shape:'gable', roof:'#A8724E', wall:'#EFDCC0' },
   post:  { x:534, y:46,  w:118, h:72,  name:'우체국', shape:'tower', roof:'#C4645C', wall:'#F0E0D4' },
   cafe:  { x:392, y:214, w:86,  h:62,  name:'찻집',   shape:'gable', roof:'#B07A9A', wall:'#F6E6EE' },
-  museum:{ x:712, y:52,  w:140, h:94,  name:'박물관', shape:'dome',  roof:'#A87858', wall:'#EDE0CC' },
   jazz:  { x:388, y:300, w:126, h:80,  name:'재즈바 한밤', shape:'bar', roof:'#4A3E52', wall:'#6B5A72' },
   train: { x:246, y:414, w:186, h:88,  name:'기차역', shape:'flat',  roof:'#6E7A96', wall:'#E4E2EE' },
   air:   { x:534, y:420, w:184, h:84,  name:'공항',   shape:'airport', roof:'#4E7A96', wall:'#DCEAF0' },
@@ -581,7 +555,7 @@ function openMenu() {
   if (!inRide()) {
     items.push({ label:'📚 ' + vill().lib, fn: enterLibrary });
     items.push({ label:'📕 헌책방', fn: enterUsed });
-    items.push({ label:'🏛 박물관 · 지금 하는 전시', fn: () => enterShop('museum') });
+    items.push({ label:'🏛 지금 하는 전시', fn: openExpo });
     items.push({ label:'📰 신문 읽기', fn: openNews });
     items.push({ label:'✉️ 우체국 · 편지', fn: () => enterShop('post') });
     items.push({ label:'🎷 재즈바 한밤 · 사람들이 모이는 곳', fn: enterJazz });
@@ -668,8 +642,6 @@ function targets() {
     add({ type:'post' }, pd.x + pd.w / 2, pd.y + 6, '우체국 · 내 우편함', 22);
     const cd = doorOf(BLD.cafe);
     add({ type:'cafe' }, cd.x + cd.w / 2, cd.y + 6, '찻집에서 한숨 돌리기', 20);
-    const md = doorOf(BLD.museum);
-    add({ type:'museum' }, md.x + md.w / 2, md.y + 6, '박물관 · 지금 하는 전시', 24);
     const jd = doorOf(BLD.jazz);
     add({ type:'jazz' }, jd.x + jd.w / 2, jd.y + 6, '재즈바 한밤 · 사람들이 모이는 곳', 24);
     add({ type:'pond' }, POND.x + POND.w / 2, POND.y + POND.h + 6,
@@ -869,7 +841,6 @@ const ACTIONS = {
     updateFireSound();
     toast(p.lit ? '벽난로에 불을 붙였어요' : '벽난로를 껐어요');
   },
-  museum:  () => enterShop('museum'),
   shopdesk:() => SHOPS[place.key].action(),
   roofup:   () => shopClimb('up'),
   roofdown: () => shopClimb('down'),
@@ -4543,7 +4514,6 @@ function drawTown(t) {
   building(BLD.post, t, isF('post'));
   building(BLD.lib, t, isF('library'));
   building(BLD.cafe, t, isF('cafe'));
-  building(BLD.museum, t, isF('museum'));
   building(BLD.jazz, t, isF('jazz'));
   building(BLD.train, t, isF('train'));
   building(BLD.air, t, isF('air'));
@@ -5086,7 +5056,7 @@ function drawUsed(t) {
   [[178, 130], [312, 132], [412, 128], [468, 130]].forEach(([x, y], i) => bookPile(x, y, 13, 9 + i, i * 3));
 }
 
-// 작은 가게들 — 우체국 · 찻집 · 박물관이 같은 틀을 쓴다
+// 작은 가게들 — 우체국 · 찻집이 같은 틀을 쓴다
 // 찻집 루프탑 — 하늘 아래 파라솔 탁자
 function drawCafeRoof(t) {
   px(0, 0, SHOP_W, RT, '#8FC4E4');
