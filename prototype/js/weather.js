@@ -39,6 +39,14 @@ const Weather = (() => {
     return Object.assign({ key, night, dusk, hour }, KINDS[key]);
   }
 
+  // ── 실내 밤 톤 — 벽·바닥만 가라앉힌다 ─────────────────────
+  //  가구(램프·벽난로 글로우)보다 먼저 불러서, 그 위에 얹히는 불빛이 죽지 않게 한다.
+  //  camX·camY·VW·VH는 지금 화면에 실제로 보이는 뷰포트 — 방이 화면보다 넓어 카메라가
+  //  옆으로 패닝돼 있어도(ROOM_W > 뷰포트) 밤 톤이 화면 전체를 확실히 덮는다.
+  function nightTint(w, camX, camY, VW, VH, px) {
+    if (w.night) px(camX, camY, VW, VH, 'rgba(26,24,56,.34)');
+  }
+
   // ── 실내 : 창으로 들어오는 빛과 비 ────────────────────────
   //  win 은 창문 아이템, floorTop 은 바닥이 시작하는 y
   function indoor(w, win, floorTop, H, t, px) {
@@ -116,5 +124,5 @@ const Weather = (() => {
     const k = f / 260;
     return k > .75 ? .55 : k > .5 ? .12 : k > .3 ? .38 : k * .2;   // 두 번 번쩍
   }
-  return { of, indoor, outdoor, thunderTick, flashAlpha };
+  return { of, indoor, outdoor, nightTint, thunderTick, flashAlpha };
 })();

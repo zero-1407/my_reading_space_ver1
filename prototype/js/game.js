@@ -78,7 +78,7 @@ const STALLS = [
 const USED_SWAP = { x:418, y:88, w:52, h:20 };       // 교환대
 const CAT = { x:352, y:80 };
 
-// 작은 가게들 안 — 우체국 · 가구점 · 찻집 · 꽃집 · 박물관.
+// 작은 가게들 안 — 우체국 · 찻집 · 박물관.
 // 전부 이 하나의 틀(SHOP_*)을 같이 쓰고, 가게마다 색과 장식(decor)만 다르다.
 const SHOP_W = 320;
 const SHOP_DOOR = { x:10, y:18, w:34, h:52 };
@@ -115,28 +115,6 @@ function dith(x, y, w, h, c1, c2) {
 function blob(cx, cy, r, c) {
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fillStyle = c; ctx.fill();
 }
-// 꽃송이 — 동그라미 하나면 그냥 공이다. 꽃잎 5장을 돌려 붙여야 꽃이 된다
-function bloom(cx, cy, r, c) {
-  const pr = Math.max(1, Math.round(r * .58)), orbit = r * .62;
-  for (let i = 0; i < 5; i++) {
-    const a = (Math.PI * 2 * i) / 5 - Math.PI / 2;
-    blob(Math.round(cx + Math.cos(a) * orbit), Math.round(cy + Math.sin(a) * orbit * .9), pr, c);
-  }
-  blob(Math.round(cx - orbit * .3), Math.round(cy - orbit * .3), Math.max(1, pr - 1), shade(c, 1.35));
-  blob(cx, cy, Math.max(1, Math.round(r * .4)), shade(c, .55));
-}
-// 튤립 — 세 덩이를 겹쳐 봉긋한 컵 모양으로, 데이지(bloom)와는 다른 실루엣
-function tulipHead(cx, cy, s, c) {
-  blob(cx - s * .55, cy, s * .62, c);
-  blob(cx + s * .55, cy, s * .62, c);
-  blob(cx, cy - s * .35, s * .72, c);
-}
-// 장미 — 겹겹이 두른 느낌만 흉내내도 데이지와는 확실히 다르게 보인다
-function roseHead(cx, cy, s, c) {
-  blob(cx, cy, s, shade(c, .8));
-  blob(cx, cy, s * .68, c);
-  blob(cx, cy, s * .32, shade(c, 1.3));
-}
 // 살짝 좁아지는 화분 — 사다리꼴이라 사각 블록보다 도자기 같다
 function potShape(x, y, w, h, c) {
   const taper = w * .16;
@@ -144,12 +122,6 @@ function potShape(x, y, w, h, c) {
     const inset = Math.round(i * taper / h);
     px(x + inset, y + i, Math.max(1, w - inset * 2), 1, i === 0 ? shade(c, 1.3) : i === h - 1 ? shade(c, .7) : c);
   }
-}
-// 줄무늬 러그 — 매장 바닥에 깔린 텍스타일. 깨끗한 동심원 대신 손짜임 패턴 느낌으로
-function textileRug(x, y, w, h, base, accent) {
-  px(x, y, w, h, base);
-  for (let i = 2; i < w - 2; i += 5) px(x + i, y + 2, 2, h - 4, shade(accent, 1.06));
-  px(x + 2, y + 2, w - 4, 1, shade(base, 1.3)); px(x + 2, y + h - 3, w - 4, 1, shade(base, .7));
 }
 const SHOPS = {
   post: {
@@ -179,32 +151,6 @@ const SHOPS = {
       potShape(226, 104, 14, 10, '#7A6248'); blob(233, 96, 5, '#7C9A6E'); blob(229, 92, 4, '#8AAE7A'); // 화분
     },
   },
-  furn: {
-    title:'가구점', wall:'#F0E8D0', floor:'#C8A876', wood:'#8A6A44', rug:'#B08A5E',
-    staff:{ h:'#4a3a2e', c:'#9aa87e' }, deskLabel:'방에 놓을 것 고르기',
-    action: () => openFurniture(),
-    decor(t) {
-      shopWindow(230, 12, 40, 34);
-      // 왼쪽 — 작은 침실 진열
-      px(14, 78, 30, 20, '#C48A6E'); px(14, 74, 30, 6, '#EFE4D0');        // 침대
-      px(14, 74, 6, 10, '#EFE4D0');
-      px(48, 66, 4, 32, '#6E5238');                                      // 스탠드 조명 — 갓은 둥글게
-      blob(50, 60, 7, '#F0DFA0'); blob(48, 57, 3, '#FBF3E2');
-      // 가운데 — 서랍장과 액자
-      px(70, 60, 26, 38, '#B4986A'); px(70, 60, 26, 3, '#8A6A44');
-      px(75, 68, 5, 5, '#6E5238'); px(84, 68, 5, 5, '#6E5238');
-      px(75, 80, 5, 5, '#6E5238'); px(84, 80, 5, 5, '#6E5238');
-      px(72, 40, 20, 16, '#6E5236'); px(74, 42, 16, 12, '#D8CDB4');
-      px(70, 98, 26, 3, 'rgba(60,42,24,.15)');                           // 서랍장 그림자
-      // 오른쪽 — 의자 두 개 + 작은 사이드테이블
-      [108, 130].forEach(x => {
-        px(x, 82, 14, 16, '#8A6A44'); px(x, 78, 14, 4, '#A88A5E');
-        px(x - 1, 98, 16, 2, 'rgba(60,42,24,.15)');
-      });
-      potShape(102, 68, 11, 9, '#8A6A44');                               // 서랍장 옆 작은 협탁 위 화분
-      blob(107, 61, 4, '#7C9A6E'); blob(104, 57, 3, '#8AAE7A');
-    },
-  },
   cafe: {
     title:'찻집', wall:'#F6E6EE', floor:'#D8A8B8', wood:'#8A5A6E', rug:'#C48AA0',
     staff:{ h:'#5a4030', c:'#B07A9A' }, deskLabel:'차 한 잔 주문하기',
@@ -232,64 +178,6 @@ const SHOPS = {
         blob(x, py0 + ph - 9, 6, c); blob(x - 2, py0 + ph - 13, 2.4, shade(c, 1.3));
       });
       px(px0, py0 + ph - 2, pw, 2, '#8A5A6E');
-    },
-  },
-  flower: {
-    title:'꽃집', wall:'#E6DCC2', floor:'#B99A72', wood:'#7A6248', rug:'#B5764F',
-    staff:{ h:'#3d2b28', c:'#93A374' }, deskLabel:'화분 고르기',
-    action: () => openFlower(),
-    decor(t) {
-      shopWindow(232, 10, 42, 36);
-      // 벽지 — 흩뿌린 잎사귀 무늬 (깨끗한 단색 대신 손으로 콕콕 찍은 듯)
-      [[8,10],[36,6],[74,14],[130,8],[176,16],[20,32],[96,4],[150,26]].forEach(([x,y]) => {
-        px(x, y, 3, 5, shade('#93A374', .92)); px(x + 1, y - 1, 1, 2, shade('#93A374', 1.1));
-      });
-      // 왼쪽 벽 — 통마다 한 종류씩, 한가득. 꽃집은 듬성듬성이 아니라 넘치도록 담겨 있어야 한다
-      const buckets = [
-        { x:4,  y:88, w:22, h:26, bc:'#8A8A86', sp:roseHead,  col:'#D4304A', n:6, sh:6 },
-        { x:32, y:94, w:19, h:20, bc:'#B0703E', sp:tulipHead, col:'#E8B43A', n:5, sh:5 },
-        { x:56, y:86, w:22, h:28, bc:'#8A8A86', sp:bloom,     col:'#D48AAE', n:6, sh:6 },
-        { x:84, y:96, w:18, h:18, bc:'#B0703E', sp:tulipHead, col:'#8A5CC9', n:4, sh:5 },
-      ];
-      buckets.forEach(b => {
-        px(b.x - 1, b.y + b.h, b.w + 2, 2, 'rgba(60,42,24,.18)');           // 그림자
-        potShape(b.x, b.y, b.w, b.h, b.bc);
-        px(b.x - 2, b.y + 3, 2, 5, shade(b.bc, 1.15)); px(b.x + b.w, b.y + 3, 2, 5, shade(b.bc, 1.15)); // 손잡이 고리
-        for (let i = 0; i < b.n; i++) {                                     // 줄기 여러 대 — 부채꼴로 퍼지게
-          const spread = (i - (b.n - 1) / 2) * (b.w / b.n * 1.15);
-          const topY = b.y - b.sh * 3 - Math.abs(spread) * .35 + (i % 2) * 3;
-          const sx = b.x + b.w / 2 + spread;
-          px(sx, topY + 3, 2, b.y - topY - 3, shade('#5F7A4A', .95 + (i % 3) * .06));
-          b.sp(sx + 1, topY, b.sh, shade(b.col, .88 + (i % 3) * .13));
-        }
-        blob(b.x + 2, b.y - 6, 3, '#7C8F5A'); blob(b.x + b.w - 2, b.y - 4, 3, '#8A9A6E'); // 곁잎
-      });
-      // 유리 진열장 — 종류를 섞은 꽃다발이 가득, 한 아름 안긴 느낌
-      const gx = 118, gy = 40, gw = 96, gh = 46;
-      px(gx - 2, gy - 2, gw + 4, gh + 4, '#7A6248');
-      px(gx, gy, gw, gh, 'rgba(220,232,224,.55)');
-      [0, 1, 2, 3].forEach(i => px(gx + 2, gy + 2 + i * 11, gw - 4, 1, 'rgba(255,255,255,.35)'));
-      const bunch = ['#D4304A', '#E8B43A', '#D48AAE', '#8A5CC9', '#E85C52', '#F2D93E', '#7C9AD4'];
-      const species = [roseHead, tulipHead, bloom];
-      for (let i = 0; i < 9; i++) {
-        const bx = gx + 6 + i * 10.5 + (i % 2 ? 3 : -2), by = gy + gh - 9 - (i % 3) * 6;
-        const col = bunch[i % bunch.length];
-        px(bx, by, 2, 10, '#6E8557');
-        species[i % species.length](bx + 1, by - 5, 4.5, col);
-      }
-      px(gx, gy + gh - 2, gw, 2, '#7A6248');
-      // 화분 나무 두 그루 — 문 옆, 둥근 수관으로
-      [[232, 92, 8], [254, 96, 6]].forEach(([x, y, r]) => {
-        potShape(x - r * .8, y, r * 1.6, r, '#7A6248');
-        blob(x, y - r * 1.1, r, '#7C8F5A'); blob(x - r * .5, y - r * 1.7, r * .7, shade('#7C8F5A', 1.35));
-      });
-      px(65, 4, 2, 15, '#7A6248'); blob(66, 20, 6, '#93A374');             // 매달린 화분
-      px(109, 4, 2, 15, '#7A6248'); blob(110, 24, 6, '#8A9A6E');
-      // 포장용 리본 타래와 종이롤 — 책상 자리는 피해서 앞쪽 바닥에
-      potShape(158, 116, 20, 9, '#B08A5E');
-      [['#D4304A', 0], ['#E8B43A', 6], ['#7C9AD4', 12]].forEach(([c, dx]) =>
-        blob(163 + dx, 114, 2.4, c));
-      textileRug(96, 113, 46, 15, '#B5764F', '#8A6A44');
     },
   },
   museum: {
@@ -325,9 +213,7 @@ const BLD = {
   lib:   { x:248, y:34,  w:196, h:104, name:'도서관', shape:'dome',  roof:'#7E8A96', wall:'#EFE8DA' },
   used:  { x:44,  y:70,  w:112, h:78,  name:'헌책방', shape:'gable', roof:'#A8724E', wall:'#EFDCC0' },
   post:  { x:534, y:46,  w:118, h:72,  name:'우체국', shape:'tower', roof:'#C4645C', wall:'#F0E0D4' },
-  furn:  { x:566, y:206, w:132, h:88,  name:'가구점', shape:'shed',  roof:'#8A7A4E', wall:'#F0E8D0' },
   cafe:  { x:392, y:214, w:86,  h:62,  name:'찻집',   shape:'gable', roof:'#B07A9A', wall:'#F6E6EE' },
-  flower:{ x:196, y:222, w:74,  h:54,  name:'꽃집',   shape:'greenhouse', roof:'#93A9A0', wall:'#E6DCC2' },
   museum:{ x:712, y:52,  w:140, h:94,  name:'박물관', shape:'dome',  roof:'#A87858', wall:'#EDE0CC' },
   jazz:  { x:388, y:300, w:126, h:80,  name:'재즈바 한밤', shape:'bar', roof:'#4A3E52', wall:'#6B5A72' },
   train: { x:246, y:414, w:186, h:88,  name:'기차역', shape:'flat',  roof:'#6E7A96', wall:'#E4E2EE' },
@@ -348,9 +234,7 @@ const PATHS = [
   { w:13, pts:[[318,158],[338,138]] },                 // 도서관 앞
   { w:12, pts:[[100,196],[102,150]] },                 // 헌책방 앞
   { w:12, pts:[[556,166],[592,124]] },                 // 우체국 앞
-  { w:12, pts:[[672,238],[632,296]] },                 // 가구점 앞
   { w:11, pts:[[400,176],[434,214],[436,276]] },       // 찻집 앞
-  { w:11, pts:[[238,182],[232,222],[234,276]] },       // 꽃집 앞
   { w:12, pts:[[128,462],[102,428]] },                 // 버스정류장
   { w:13, pts:[[372,466],[340,502]] },                 // 기차역
   { w:13, pts:[[540,462],[626,504]] },                 // 공항
@@ -700,8 +584,6 @@ function openMenu() {
     items.push({ label:'🏛 박물관 · 지금 하는 전시', fn: () => enterShop('museum') });
     items.push({ label:'📰 신문 읽기', fn: openNews });
     items.push({ label:'✉️ 우체국 · 편지', fn: () => enterShop('post') });
-    items.push({ label:'🪑 가구점', fn: () => enterShop('furn') });
-    items.push({ label:'🪴 꽃집', fn: () => enterShop('flower') });
     items.push({ label:'🎷 재즈바 한밤 · 사람들이 모이는 곳', fn: enterJazz });
     items.push({ label:'🚪 손님 문 · 다른 사람 방', fn: openVisit });
     items.push({ label:'🚌 다른 마을로 (버스 · 기차)', fn: openMap });
@@ -784,12 +666,8 @@ function targets() {
     add({ type:'used' }, ud.x + ud.w / 2, ud.y + 6, '헌책방 들어가기', 22);
     const pd = doorOf(BLD.post);
     add({ type:'post' }, pd.x + pd.w / 2, pd.y + 6, '우체국 · 내 우편함', 22);
-    const fd = doorOf(BLD.furn);
-    add({ type:'furn' }, fd.x + fd.w / 2, fd.y + 6, '가구점 · 방에 놓을 것 사기', 22);
     const cd = doorOf(BLD.cafe);
     add({ type:'cafe' }, cd.x + cd.w / 2, cd.y + 6, '찻집에서 한숨 돌리기', 20);
-    const wd2 = doorOf(BLD.flower);
-    add({ type:'flower' }, wd2.x + wd2.w / 2, wd2.y + 6, '꽃집 · 화분 사기', 20);
     const md = doorOf(BLD.museum);
     add({ type:'museum' }, md.x + md.w / 2, md.y + 6, '박물관 · 지금 하는 전시', 24);
     const jd = doorOf(BLD.jazz);
@@ -991,7 +869,6 @@ const ACTIONS = {
     updateFireSound();
     toast(p.lit ? '벽난로에 불을 붙였어요' : '벽난로를 껐어요');
   },
-  furn:    () => enterShop('furn'),
   museum:  () => enterShop('museum'),
   shopdesk:() => SHOPS[place.key].action(),
   roofup:   () => shopClimb('up'),
@@ -1067,7 +944,6 @@ const ACTIONS = {
     dialog.at = { x: POND.x + POND.w / 2, y: POND.y }; placeBubble();
   },
   cafe:    () => enterShop('cafe'),
-  flower:  () => enterShop('flower'),
   festival:() => {
     const F = SEASON.festival;
     const cs = [{ label:'좋네요' }];
@@ -1739,8 +1615,10 @@ $('sw-go').onclick = () => {
   layoutRoom(ROOMS[0]); renderStats(); closeOv();
   toast('『' + swapMine.t + '』를 두고 『' + swapTheirs.t + '』를 데려왔어요');
 };
-// ── 가구점 · 꽃집 ─────────────────────────────────────────────
-//  산 것은 바로 내 방 items 에 들어간다. 방에서 E 를 눌러 자리를 잡는다.
+// ── 가구 · 화분 고르기 ────────────────────────────────────────
+//  예전엔 가구점·꽃집 건물을 따로 찾아가야 했는데, 건물을 없애고 내 방
+//  꾸미기(E) 메뉴에서 바로 고르도록 옮겼다. 산 것은 바로 내 방 items 에
+//  들어간다 — 방에서 E 를 눌러 자리를 잡는다.
 const FURNITURE = [
   { kind:'shelf', name:'작은 책장',   d:'책 열 권쯤 들어가요', mk: () => shelf(120, 26, 46, 38, []) },
   { kind:'shelf', name:'큰 책장',     d:'세 칸짜리',           mk: () => shelf(118, 10, 64, 56, []) },
@@ -1755,15 +1633,15 @@ const FURNITURE = [
   { kind:'perch', name:'새 홰',       d:'편지 물고 온 새가 앉아요', mk: () => item({ kind:'perch', x:136, y:30, w:18, h:2 }) },
 ];
 function buyInto(mkfn, name) {
+  pushHistory();
   ROOMS[0].items.push(mkfn());
   layoutRoom(ROOMS[0]); renderStats(); Audio8.play('coin');
   toast(name + '을(를) 샀어요 · 내 방에서 E 를 눌러 자리를 잡으세요');
 }
 function openFurniture() {
-  say('가구점 주인', ['방에 놓을 것들이에요.', '사면 바로 방으로 배달해 드립니다.'],
+  say('가구 고르기', ['방에 놓을 것들이에요.', '고르면 바로 방에 놓여요.'],
     FURNITURE.map(f => ({ label:'🪑 ' + f.name + ' — ' + f.d, fn: () => buyInto(f.mk, f.name) }))
-      .concat([{ label:'구경만 할게요' }]));
-  dialog.at = { x:SHOP_DESK.x + 35, y:SHOP_DESK.y - 20 }; placeBubble();
+      .concat([{ label:'그만 볼게요' }]));
 }
 const PLANTS = [
   { name:'몬스테라', d:'잎이 크게 벌어져요' },
@@ -1772,12 +1650,12 @@ const PLANTS = [
   { name:'스투키',   d:'키가 쭉 자랍니다' },
 ];
 function openFlower() {
-  say('꽃집 주인', ['화분 하나 들이실래요?', '물을 줄수록 자라요. 방에서 눌러보시면 됩니다.'],
+  say('화분 고르기', ['화분 하나 들이실래요?', '물을 줄수록 자라요. 방에서 눌러보시면 됩니다.'],
     PLANTS.map(p => ({ label:'🪴 ' + p.name + ' — ' + p.d, fn: () => {
+      pushHistory();
       ROOMS[0].items.push(item({ kind:'plant', x:150, y:108, w:10, h:16, grow:0, species:p.name }));
-      Audio8.play('coin'); toast(p.name + ' 화분을 샀어요');
-    } })).concat([{ label:'다음에 올게요' }]));
-  dialog.at = { x:SHOP_DESK.x + 35, y:SHOP_DESK.y - 20 }; placeBubble();
+      Audio8.play('coin'); toast(p.name + ' 화분을 놓았어요');
+    } })).concat([{ label:'다음에 할게요' }]));
 }
 
 // ── 차 · 과자 받았을 때 ──────────────────────────────────────
@@ -2955,6 +2833,7 @@ function openMail(to, name) {
     openGift(mine[0]); return;
   }
   Audio8.play('mail');
+  checkMysteryMail();
   const L = ROOMS[0].letters;
   $('mb-title').textContent = '내 우편함';
   $('mb-cap').textContent = L.length
@@ -2967,7 +2846,7 @@ function openMail(to, name) {
     el.innerHTML = '<div class="h"><b>' + x.from + '</b><span>' +
       (x.read ? (x.book ? '『' + x.book + '』' : '✉️ 편지') : '<span class="new">새 편지</span>') + '</span></div>' +
       '<div class="q">“' + x.text + '”</div>';
-    el.onclick = () => { x.read = true; showLetter(x); };
+    el.onclick = () => { x.read = true; mystMarkRead(x); showLetter(x); };
     list.appendChild(el);
   });
   showOv('mail');
@@ -2985,11 +2864,92 @@ function showLetter(x) {
       syncRoom(); Audio8.play('pin'); toast('내 일정에 추가했어요'); addBtn.style.display = 'none';
     };
   } else addBtn.style.display = 'none';
+
+  const replyBox = $('l-reply'); replyBox.innerHTML = ''; replyBox.style.display = 'none';
+  const def = x.mystId && MYSTERY_LETTERS.find(m => m.id === x.mystId);
+  if (def && def.reply && !x.replied) {
+    replyBox.style.display = 'block';
+    def.reply.forEach(r => {
+      const b = document.createElement('button');
+      b.className = 'btn ghost'; b.style.marginTop = '6px'; b.textContent = '✉️ ' + r.label;
+      b.onclick = () => { mystReply(x, r.label); Audio8.play('page'); toast('답장을 써서 넣었어요'); showLetter(x); };
+      replyBox.appendChild(b);
+    });
+  } else if (x.replied) {
+    replyBox.style.display = 'block';
+    replyBox.innerHTML = '<div class="cap" style="margin-top:8px">나의 답장 — “' + esc(x.replied) + '”</div>';
+  }
+  if (def && def.gift && !x.gifted) mystGiveGift(x);
   showOv('letter');
 }
 function openLetter() {
+  checkMysteryMail();
   const L = room().letters.find(x => !x.read) || room().letters[0];
-  if (!L) return; L.read = true; showLetter(L);
+  if (!L) return; L.read = true; mystMarkRead(L); showLetter(L);
+}
+
+// ── 답장이 오지 않는 우체통 ──────────────────────────────────
+//  이름 모를 누군가가 실제 날짜로 하루 한 통씩 편지를 넣는다. 방 꾸미기용
+//  날짜 점프(내 일정 메뉴)로는 못 건너뛴다 — 기다리는 것 자체가 이야기의 일부라서,
+//  기기 시계(Date.now())만 본다. 진행 상태는 로그인 여부와 상관없이 이 브라우저에
+//  localStorage로 남겨서, 손님(혼자) 모드로 들어와도 매일 이어진다.
+const MYSTERY_FROM = '이름 모를 이웃';
+const MYSTERY_LETTERS = [
+  { id:'myst0', day:0,  text:'오늘은 날씨가 좋네요. 당신 방에도 볕이 잘 드나요?' },
+  { id:'myst1', day:1,  text:'우체통에 편지를 넣어보는 건 오랜만이에요. 잘 도착했으면 좋겠어요.',
+    reply:[{ label:'네, 잘 받았어요' }, { label:'당신은 누구세요?' }] },
+  { id:'myst2', day:3,  text:'답장 고마워요. 사실 저는… 오래전에 이 마을에 살던 사람이에요.' },
+  { id:'myst3', day:5,  text:'그때는 도서관이 지금처럼 크지 않았어요. 책장 세 칸이 다였는데, 그래도 매주 갔었죠.' },
+  { id:'myst4', day:8,  text:'이 마을을 떠난 지 꽤 됐어요. 그런데 요즘도 가끔 여기가 그리워서 이렇게 편지를 넣어요. 당신 방은 어떤 모습인가요?',
+    reply:[{ label:'포근해요, 책이 잔뜩 있어요' }, { label:'아직 정리하는 중이에요' }] },
+  { id:'myst5', day:12, text:'사실 제가 편지를 보낸 건, 이 마을을 좋아해 줄 사람이 있으면 좋겠어서였어요. 당신이라면 잘 돌봐줄 것 같네요. 고마워요 — 이제 여기서 인사할게요.',
+    gift:true },
+];
+const MYST_KEY = 'dotseoje.myst.v1';
+function mystLoad() {
+  try { return JSON.parse(localStorage.getItem(MYST_KEY)) || {}; } catch (e) { return {}; }
+}
+function mystSave(st) { try { localStorage.setItem(MYST_KEY, JSON.stringify(st)); } catch (e) {} }
+// ROOMS[0]는 로그인 여부와 상관없이 새로고침마다 data.js의 기본값으로 다시 시작한다
+// (letters는 애초에 서버에 저장되는 필드가 아니다) — 그래서 여기서도 "예전에 이미 온
+// 편지"를 매번 localStorage 기록만 보고 다시 채워 넣는다. delivered 여부가 아니라
+// 지금 메모리에 있는지(mystId)로만 판단해야, 새로고침해도 편지가 안 사라진다.
+function checkMysteryMail() {
+  const st = mystLoad();
+  let changed = false;
+  if (!st.start) { st.start = Date.now(); changed = true; }   // 처음 만난 순간이 0일차
+  const days = Math.floor((Date.now() - st.start) / 86400000);
+  const have = new Set(ROOMS[0].letters.map(x => x.mystId).filter(Boolean));
+  for (const L of MYSTERY_LETTERS) {
+    if (L.day <= days && !have.has(L.id)) {
+      ROOMS[0].letters.push({ from: MYSTERY_FROM, text: L.text, at: Date.now(), mystId: L.id,
+                              read: !!(st.read || []).includes(L.id),
+                              replied: (st.replies && st.replies[L.id]) || null,
+                              gifted: !!(st.gifted || []).includes(L.id) });
+    }
+  }
+  if (changed) mystSave(st);
+}
+function mystMarkRead(x) {
+  if (!x.mystId) return;
+  const st = mystLoad();
+  st.read = st.read || [];
+  if (!st.read.includes(x.mystId)) { st.read.push(x.mystId); mystSave(st); }
+}
+function mystReply(x, label) {
+  x.replied = label;
+  const st = mystLoad();
+  st.replies = st.replies || {}; st.replies[x.mystId] = label;
+  mystSave(st);
+}
+function mystGiveGift(x) {
+  x.gifted = true;
+  const st = mystLoad();
+  st.gifted = st.gifted || []; if (!st.gifted.includes(x.mystId)) st.gifted.push(x.mystId);
+  mystSave(st);
+  ROOMS[0].items.push(item({ kind:'plant', x:150, y:108, w:10, h:16, grow:2, species:'이웃이 놓고 간 화분' }));
+  layoutRoom(ROOMS[0]); renderStats(); syncRoom();
+  toast('🪴 ' + MYSTERY_FROM + '이(가) 화분을 하나 놓고 갔어요');
 }
 
 // ── 내 일정 · D-day ──────────────────────────────────────────
@@ -3845,10 +3805,9 @@ $('col-reset').onclick = () => {
   $('col-wood').value = ROOM_DEFAULT.wood; $('col-rug').value = ROOM_DEFAULT.rug;
   toast('방 색을 처음으로 되돌렸어요');
 };
-$('e-shelf').onclick = () => { pushHistory(); ROOMS[0].items.push(shelf(120, 12, 52, 52, [])); layoutRoom(ROOMS[0]);
-  Audio8.play('select'); toast('책장을 놓았어요 · 끌어서 자리를 잡으세요'); };
-$('e-plant').onclick = () => { pushHistory(); ROOMS[0].items.push(item({ kind:'plant', x:140, y:108, w:10, h:16 }));
-  Audio8.play('select'); toast('화분을 놓았어요'); };
+// 예전엔 가구점·꽃집에 가야 살 수 있었다 — 이제 방 꾸미기 메뉴에서 바로 고른다.
+$('e-shelf').onclick = () => openFurniture();
+$('e-plant').onclick = () => openFlower();
 $('e-firestyle').onclick = () => {
   const fp = sel && sel.kind === 'fireplace' ? sel : ROOMS[0].items.find(it => it.kind === 'fireplace');
   if (!fp) { toast('방에 벽난로가 없어요'); return; }
@@ -4355,22 +4314,6 @@ function building(b, t, on) {
     return;
   }
 
-  if (S === 'shed') {
-    // 가구점 — 낮은 지붕에 줄무늬 차양과 큰 쇼윈도
-    px(b.x + 2, b.y + 6, b.w - 4, b.h - 6, b.wall);
-    px(b.x - 4, b.y, b.w + 8, 9, shade(b.roof, .85));
-    px(b.x - 4, b.y, b.w + 8, 3, b.roof);
-    px(b.x + 8, b.y + 20, b.w - 40, 22, '#6E5236');                // 쇼윈도
-    px(b.x + 10, b.y + 22, b.w - 44, 18, lit());
-    px(b.x + 22, b.y + 26, 10, 12, '#A87A4E');                     // 안에 놓인 가구
-    px(b.x + 36, b.y + 30, 14, 8, '#8A7A5E');
-    for (let i = 0; i < (b.w - 16) / 8; i++)                       // 차양
-      px(b.x + 6 + i * 8, b.y + 12, 8, 6, i % 2 ? '#F4EFE4' : '#C48A5E');
-    px(b.x + 6, b.y + 18, b.w - 12, 2, '#8A7A5E');
-    frontDoor(b, on, t);
-    return;
-  }
-
   if (S === 'bar') {
     // 재즈바 — 낮은 벽돌집에 차양과 네온 간판, 창으로 새어나오는 불빛
     px(b.x + 2, b.y + 6, b.w - 4, b.h - 6, b.wall);
@@ -4441,25 +4384,6 @@ function building(b, t, on) {
     px(b.x + b.w / 2 - 20, b.y + 4, 40, 9, '#3A4450');              // 간판
     ctx.fillStyle = '#FFE08A';
     for (let i = 0; i < 4; i++) ctx.fillRect(b.x + b.w / 2 - 15 + i * 8, b.y + 7, 5, 4);
-    frontDoor(b, on, t);
-    return;
-  }
-
-  if (S === 'greenhouse') {
-    // 꽃집 — 유리 온실 지붕과 화단
-    px(b.x + 2, b.y + 14, b.w - 4, b.h - 14, b.wall);
-    for (let i = 0; i < 14; i++) {                                  // 삼각 유리 지붕
-      const w = Math.round(b.w - (i / 14) * b.w * .7);
-      px(b.x + (b.w - w) / 2, b.y - i, w, 1, i % 3 === 0 ? shade(b.roof, 1.3) : '#BFE4EA');
-    }
-    px(b.x - 2, b.y + 12, b.w + 4, 3, b.roof);
-    px(b.x + 6, b.y + 20, b.w - 12, 18, '#DCEEE0');                 // 큰 창
-    px(b.x + 8, b.y + 22, b.w - 16, 14, '#BFE4EA');
-    for (let i = 0; i < (b.w - 16) / 9; i++) {                      // 화단 상자
-      const fx = b.x + 6 + i * 9;
-      px(fx, b.y + b.h - 12, 7, 8, '#8A6A44');
-      px(fx + 1, b.y + b.h - 16, 5, 5, ['#D4645C', '#E8B45A', '#8A7AAE'][i % 3]);
-    }
     frontDoor(b, on, t);
     return;
   }
@@ -4618,11 +4542,9 @@ function drawTown(t) {
   building(BLD.used, t, isF('used'));
   building(BLD.post, t, isF('post'));
   building(BLD.lib, t, isF('library'));
-  building(BLD.flower, t, isF('flower'));
   building(BLD.cafe, t, isF('cafe'));
   building(BLD.museum, t, isF('museum'));
   building(BLD.jazz, t, isF('jazz'));
-  building(BLD.furn, t, isF('furn'));
   building(BLD.train, t, isF('train'));
   building(BLD.air, t, isF('air'));
   // 호수 — 계절마다 노는 법이 다르다
@@ -4841,9 +4763,18 @@ function drawItem(R, it, t) {
       px(it.x, it.y, it.w, it.h, '#6E5236');
       px(it.x + 3, it.y + 3, it.w - 6, it.h - 6, shade(R.wall, 1.28));
       sprite(BODY.down.slice(0, 8), it.x + 8, it.y + 6, false, { h:R.hair, c:R.shirt }); break;
-    case 'lamp':
-      px(it.x - 8, it.y + 6, 26, 22, 'rgba(255,240,180,.16)');
+    case 'lamp': {
+      if (WEATHER.night || WEATHER.dusk) {
+        // 밤·노을엔 불꽃 글로우와 같은 방식으로 은은하게 번지는 불빛을 크게 키운다
+        const cx = it.x + it.w / 2, cy = it.y + 7, gr = it.w * (WEATHER.night ? 2.2 : 1.6);
+        const glow = ctx.createRadialGradient(cx, cy, 2, cx, cy, gr);
+        glow.addColorStop(0, 'rgba(255,196,110,.42)'); glow.addColorStop(1, 'rgba(255,196,110,0)');
+        ctx.fillStyle = glow; ctx.fillRect(cx - gr, cy - gr, gr * 2, gr * 2);
+      } else {
+        px(it.x - 8, it.y + 6, 26, 22, 'rgba(255,240,180,.16)');
+      }
       Art.drawArt(Art.LAMP_ART, it.x, it.y); break;
+    }
     case 'plant': {
       // 단순하게 — 화분(사다리꼴) 위에 뾰족한 잎이 부채처럼 퍼진 모양 (뭉친 공 대신 진짜 잎처럼)
       const pw = it.w, ph = Math.round(it.h * .42), px0 = it.x, py0 = it.y + it.h - ph;
@@ -5039,6 +4970,7 @@ function drawPortal(P, on, t) {
 
 function drawRoom(R, t) {
   shellRoom(R);
+  Weather.nightTint(WEATHER, camX, camY, VW, VH, px);   // 벽·바닥만 밤 톤으로 — 가구 글로우는 그 위에 그대로 산다
   drawPortal(portalOf(R), isF('visit'), t);
   const order = { rug:0, window:1, frame:1, poster:1, card:1, perch:1, shelf:2, table:2, sofa:2, lamp:3, plant:4, fireplace:1 };
   R.items.slice().sort((a, b) => (order[a.kind] ?? 2) - (order[b.kind] ?? 2)).forEach(it => drawItem(R, it, t));
@@ -5154,7 +5086,7 @@ function drawUsed(t) {
   [[178, 130], [312, 132], [412, 128], [468, 130]].forEach(([x, y], i) => bookPile(x, y, 13, 9 + i, i * 3));
 }
 
-// 작은 가게들 — 우체국 · 가구점 · 찻집 · 꽃집 · 박물관이 같은 틀을 쓴다
+// 작은 가게들 — 우체국 · 찻집 · 박물관이 같은 틀을 쓴다
 // 찻집 루프탑 — 하늘 아래 파라솔 탁자
 function drawCafeRoof(t) {
   px(0, 0, SHOP_W, RT, '#8FC4E4');
@@ -5632,6 +5564,7 @@ Gate.open(async () => {
   } else {
     toast('혼자 모드로 들어왔어요 · 친구와 함께하려면 서버를 켜주세요');
   }
+  checkMysteryMail();
 });
 setInterval(() => { if (Net.online) syncRoom(); }, 30000);   // 놓친 변경 대비
 addEventListener('beforeunload', () => {
