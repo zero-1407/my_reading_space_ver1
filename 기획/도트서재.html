@@ -232,9 +232,9 @@ footer { margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--line);
 <div class="wrap">
 
 <header>
-  <div class="eyebrow">제품 기획 · 2026.09.04</div>
+  <div class="eyebrow">제품 기획 · 2026.09.04 초안 · 2026.09.13 갱신</div>
   <h1>도트 서재</h1>
-  <div class="working">작업용 이름 · 확정 아님</div>
+  <div class="working">작업용 이름 · 확정 아님 · 아래 "지금까지 만든 것" 절에 실제 구현 상태 반영</div>
   <p class="lede">
     인터넷 안에 <b>자기만의 방</b>을 짓고, 도트 아바타로 걸어다니며
     자기가 읽은 책을 꽂아두는 공간. 남의 방에 놀러 가 책을 빌려오고,
@@ -246,6 +246,90 @@ footer { margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--line);
 </header>
 
 <div class="spines" id="spines"></div>
+
+<section>
+  <h2><span class="num">갱신 · 2026.09.13</span>지금까지 실제로 만든 것</h2>
+  <p>
+    9월 4일 초안은 그대로 아래에 남겨두고, 이번에 실제 코드(<code>prototype/js/*.js</code>,
+    <code>server.js</code>, <code>store.js</code>)를 훑어 지금 뭐가 진짜로 돌아가는지 확인했다.
+    결과부터 말하면 <strong>0단계는 이미 한참 지났다.</strong> 계정·서버·실제 공공데이터 연동까지
+    붙어 있어, "느낌 검증용 단일 HTML"보다는 이미 백엔드가 있는 서비스에 가깝다.
+  </p>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>기능</th><th>원안</th><th>현재 상태</th></tr></thead>
+      <tbody>
+        <tr><th>책등 책장 · KDC 도감</th><td>표지 대신 책등, 십진분류 10칸</td>
+            <td>구현됨 — 실제로 읽은 책 기준으로 도감 칸이 채워진다</td></tr>
+        <tr><th>대출카드 · 빌려가기</th><td>남의 방 책을 빌려오면 내 책장에</td>
+            <td>구현됨 — 상대 서버 데이터에 실제로 흔적이 남는다(<code>leaveTrace</code>)</td></tr>
+        <tr><th>문장 배달(새)</th><td>거리 × 새 속도로 도착 지연</td>
+            <td>구현됨 — 편지 길이에 따라 참새·전서구·기러기로 분화, 친구의 실제 서버 우편함에 쌓임</td></tr>
+        <tr><th>계정 · 친구</th><td>원안엔 상세 없음</td>
+            <td>구현됨 — 아이디/비밀번호 가입, 게스트 모드, 친구 코드 상호 등록까지</td></tr>
+        <tr><th>위시리스트 · 리뷰</th><td>리뷰(밑줄) 언급만 있었음</td>
+            <td>구현됨 — 읽고 싶은 책 목록과 감상 리뷰가 별도 기능으로 분리돼 있음</td></tr>
+        <tr><th>마을 도서관</th><td>가상의 마을 도서관 공용 공간</td>
+            <td>원안보다 진행 — 도서관 이름을 걸면 그 기관이 실제로 보유한 장서를 공공데이터로 받아온다</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note">
+    <span class="tag">해결됨 · 2026.09.13</span>
+    <p>
+      책 등록이 고정 목록(<code>data.js</code>의 <code>CATALOG</code>)에서 고르는 방식뿐이라
+      원안 1단계 목표("책 검색해서 책등으로 꽂기")가 막혀 있던 문제. 검색 모달에
+      <strong>"✏️ 목록에 없는 책, 직접 추가하기"</strong>를 추가해, 제목만 입력하면 제목 해시로
+      책등 색·높이·두께를 정해 바로 책장에 꽂히도록 고쳤다(<code>makeCustomBook</code>,
+      <code>room.html</code> · <code>game.js</code>). 이미 있는 목록과 겹치면 그쪽으로
+      안내하고, 중복 등록은 막는다. 헤드리스 브라우저로 실제 클릭까지 검증 완료.
+      검색 자체는 이후 카카오 책 검색 API로 더 매끄럽게 만들었다(아래 "기술" 절 참고).
+    </p>
+  </div>
+
+  <h3>구조 원칙은 지켜졌다 — 자리는 재즈바로 확정</h3>
+  <p>
+    "실시간은 한 곳에만" 원칙은 지켜지고 있고, 이미 재즈바에 잘 동작하는 구현(3초 폴링,
+    정원 10명)이 있으니 <strong>이 자리를 재즈바로 확정</strong>한다. 마을 도서관으로 옮기는
+    작업은 재즈바를 걷어내고 다시 짜야 하는 만큼 비용 대비 얻는 게 없다 — 도서관은 지금처럼
+    "실제 기관과 연결된 장서 열람" 역할을, 재즈바는 "사람을 실시간으로 만나는 자리" 역할을
+    나눠 맡는 것으로 정리한다.
+  </p>
+
+  <h3>계획에 없던 추가 — 하나씩 판단이 필요하다</h3>
+  <p>
+    아래는 원안에 없었지만 이미 코드에 들어간 것들이다. "코어 루프(읽는다 → 방이 자란다 →
+    교류한다)에 기여하는가"를 기준으로 짚었다.
+  </p>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>기능</th><th>코어 루프와의 관계</th><th>판단</th></tr></thead>
+      <tbody>
+        <tr><th>펫 보호소 · 입양</th><td>독서와 직접 연결 없음</td>
+            <td><strong>확정 · 유지하되 동결.</strong> 이미 만들어져 잘 도는 기능을 걷어내는
+              비용이 더 크다 — 지우지 않는다. 다만 코어 루프와 무관하니 앞으로 여기에 새
+              기능을 더 얹지는 않고, 지금 상태로 둔다</td></tr>
+        <tr><th>신문(실제 뉴스 RSS)</th><td>도서관 분위기 소품</td>
+            <td>키 없이 RSS만 쓰므로 비용이 낮고 몰입감엔 도움. 읽기 행위와는 무관하지만 리스크도 작음</td></tr>
+        <tr><th>전시 정보(공공데이터)</th><td>박물관 소품</td>
+            <td>신문과 같은 성격 — 있으면 좋지만 없어도 루프에 지장 없음</td></tr>
+        <tr><th>재즈바 실시간</th><td>교류 축과 직접 맞닿음</td>
+            <td><strong>확정 · 이 자리로 굳힘.</strong> 원안의 "실시간 공용 공간"을 그대로
+              대신하고 있으니 더 손댈 것 없음</td></tr>
+        <tr><th>날씨 · 계절</th><td>분위기 소품</td>
+            <td>cozy 톤 강화에 도움, 개발·유지 비용도 낮은 편</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    결론: 다섯 개 전부 결정을 내렸다. <strong>재즈바는 실시간 공간으로 확정, 펫 보호소는
+    유지하되 더 키우지 않는 것으로 동결</strong>했고, 신문·전시·날씨는 비용이 낮아 그대로
+    둔다. 열려 있던 질문은 이걸로 닫혔다 — 검색은 카카오 책 검색 API로 대체했고, 남은 건
+    도서 어필리에이트(수익) 대체처를 고르는 것뿐이다(아래 "기술" 절 참고).
+  </p>
+</section>
 
 <section>
   <h2><span class="num">왜 지금</span>비어 있는 자리</h2>
@@ -474,8 +558,10 @@ footer { margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--line);
         <tr><th>가구 · 꾸미기 아이템</th><td>주력</td>
             <td>도트 에셋은 한 번 그리면 무한 판매. 하보가 증명한 모델이고 퀘스트 보상과 자산을 공유한다</td></tr>
         <tr><th>아바타 · 새</th><td>주력</td><td>생김새와 성격만. 속도는 팔지 않는다</td></tr>
-        <tr><th>도서 어필리에이트</th><td>0일차</td>
-            <td>큰돈은 아니지만 첫날부터 켤 수 있다. 알라딘 TTB는 메타데이터와 제휴가 한 몸이다</td></tr>
+        <tr><th>도서 어필리에이트</th><td>보류</td>
+            <td>원안은 알라딘 TTB(메타데이터+제휴가 한 몸)를 가정했으나, 알라딘이 OpenAPI를
+              2026-10-30 종료 확정(신규 키 발급은 09-04 이미 마감) — 대체 제휴처를 다시 골라야
+              큰돈은 아니어도 0일차 채널로 되살릴 수 있다</td></tr>
         <tr><th>구독</th><td>나중</td><td>통계, 방 개수, 방문자 분석</td></tr>
         <tr><th>기관 계약</th><td>B 단계</td><td>학교 · 도서관 · 교육청</td></tr>
       </tbody>
@@ -523,30 +609,32 @@ footer { margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--line);
   <h2><span class="num">순서</span>로드맵</h2>
   <div class="road">
     <div class="step">
-      <div class="stage"><b>0</b>지금</div>
+      <div class="stage"><b>0</b>완료</div>
       <div>
         <div class="t">느낌 검증</div>
-        <div class="goal">확인할 것 — 걸어가서 책을 꺼내는 게 재밌는가</div>
-        <div class="d">의존성 없는 단일 HTML 프로토타입. 방·아바타·책장·대출카드·빌려가기·도감·문장 배달까지 동작한다.
-          이게 밋밋하면 방을 더 예쁘게 만들어도 살아나지 않는다.</div>
+        <div class="goal">확인한 것 — 걸어가서 책을 꺼내는 게 재밌는가</div>
+        <div class="d">방·아바타·책장·대출카드·빌려가기·도감·문장 배달까지 동작을 넘어, 계정·서버·
+          공공데이터 연동까지 붙었다. 이 단계는 이미 지났다고 봐도 된다.</div>
       </div>
     </div>
     <div class="step">
-      <div class="stage"><b>1</b>MVP</div>
+      <div class="stage"><b>1</b>진행 중</div>
       <div>
         <div class="t">어른의 방 · 첫 공개</div>
-        <div class="goal">확인할 것 — 남의 방을 구경하고 책을 빌려오는가</div>
-        <div class="d">방 하나, 고정 테마. 책 검색해서 책등으로 꽂기. 방 URL은 로그인 없이 열린다.
-          대출카드, 빌려가기, 문장 배달. 꾸미기 판매·실시간·팔로우는 전부 뒤로 미룬다.</div>
+        <div class="goal">남은 것 — 아무 책이나 자유롭게 등록할 수 있는가</div>
+        <div class="d">대출카드·빌려가기·문장 배달·계정은 이미 됨. 막힌 것은 책 등록이 고정
+          카탈로그(<code>CATALOG</code>)뿐이라는 점 — 자유 검색/직접 입력을 열어야 공개해도
+          실사용자가 자기 책을 넣을 수 있다. 꾸미기 판매·팔로우는 여전히 2단계로 미룬다.</div>
       </div>
     </div>
     <div class="step">
-      <div class="stage"><b>2</b>수익</div>
+      <div class="stage"><b>2</b>부분 진행</div>
       <div>
-        <div class="t">마을 도서관과 가구</div>
+        <div class="t">실시간 공용 공간과 가구</div>
         <div class="goal">확인할 것 — 방을 꾸미는 데 돈을 쓰는가</div>
-        <div class="d">도서관 한 곳을 실시간으로 연다. 콜드스타트가 여기서 풀린다.
-          가구·아바타·새 판매를 붙이고, 어필리에이트를 켠다.</div>
+        <div class="d">실시간 공용 공간은 이미 있고(재즈바, 정원 10명, 3초 폴링) 이 자리로
+          확정했다. 도서 검색은 카카오 책 검색 API로 대체 완료. 아직 없는 것: 가구·아바타·새를
+          실제 돈으로 사는 결제 흐름, 그리고 도서 어필리에이트 대체처.</div>
       </div>
     </div>
     <div class="step">
@@ -562,36 +650,62 @@ footer { margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--line);
 </section>
 
 <section>
-  <h2><span class="num">기술</span>스택과 첫날의 스키마</h2>
-  <ul class="plain">
-    <li><strong>Next.js + Phaser 3</strong> — UI는 React, 캔버스 영역만 Phaser. 타일맵과 스프라이트 애니메이션이 기본 제공</li>
-    <li><strong>Tiled</strong> — 무료 맵 에디터, JSON으로 뽑아 그대로 물린다</li>
-    <li><strong>Supabase</strong> — Postgres · 인증 · 스토리지. 혼자 만들 때 가장 빠르다</li>
-    <li><strong>알라딘 TTB API</strong> — 책 메타데이터와 어필리에이트가 한 몸이라 수익화까지 직결된다</li>
-    <li><strong>에셋</strong> — itch.io에서 라이선스 확인 후 구매하거나 Aseprite로 직접</li>
-  </ul>
-
+  <h2><span class="num">기술</span>스택 — 계획과 실제</h2>
   <p>
-    두 버전을 나중에 갈라내려면 <strong>오늘</strong> 넣어야 하는 필드들이다. 지금은 전부 비어 있어도 된다.
+    원안은 Next.js + Phaser + Tiled를 가정했지만, 실제로는 <strong>프레임워크 없이</strong> 훨씬
+    가벼운 쪽으로 갔다. 아래는 지금 <code>prototype/</code>에서 실제로 돌아가는 스택이다.
   </p>
-<pre><code>users     id, birth_year, mode('adult'|'kids'), guardian_id, <b>tenant_id</b>
-tenants   id, type('library'|'school'), name          -- 어른 모드는 NULL
-books     <b>isbn</b> ← 정본 키, title, author, kdc, adult_flag, age_min
-catalogs  tenant_id, isbn                             -- 화이트리스트
-rooms     user_id, theme, visibility('public'|'link'|<b>'tenant'</b>|'private')
-quests    id, tenant_id(NULL=글로벌), type, params jsonb
-letters   from_id, to_id, isbn, text, sent_at, <b>deliver_at</b>, bird</code></pre>
-
   <ul class="plain">
-    <li><strong>isbn을 책의 정본 키로.</strong> 알라딘 상품ID를 키로 쓰면 도서관 시스템에 붙일 때 전부 갈아엎어야 한다. 도서관은 ISBN으로 말한다</li>
-    <li><strong>tenant_id를 처음부터.</strong> 어른 유저는 전부 NULL이지만 나중에 도서관이 들어올 자리다. 나중에 넣으면 마이그레이션 지옥</li>
-    <li><strong>quests를 코드가 아니라 데이터로.</strong> "이 도서관만의 이번 달 퀘스트"를 코드 수정 없이 만들 수 있어야 한다</li>
+    <li><strong>바닐라 JS + &lt;canvas&gt;</strong> — React도 Phaser도 없이 직접 짠 캔버스 엔진
+      (<code>game.js</code> 5,500여 줄). 빌드 단계가 없어 배포가 가볍다</li>
+    <li><strong>Node 코어 http 서버</strong> — Express 없이 <code>http</code>/<code>https</code>
+      모듈만으로 정적 파일 서빙과 공공 API 프록시를 겸한다(<code>server.js</code>)</li>
+    <li><strong>Supabase</strong> — 원안대로 Postgres. 다만 npm 패키지 없이 REST(PostgREST)를
+      <code>fetch</code>로 직접 두드린다(<code>store.js</code>) — Render 무료 플랜의 유휴 슬립에도
+      데이터가 안 날아가게 하려는 선택</li>
+    <li><strong>공공데이터 API(KCISA)</strong> — 기관별 실제 장서, 전시정보. "마을 도서관이 실제
+      기관과 연결된다"는 설정은 이걸로 살아 있다</li>
+    <li><strong>카카오 책 검색 API</strong> — 검색창에 타이핑하면 400ms 디바운스 후 실시간으로
+      찾아준다(<code>/api/booksearch</code>, <code>js/booksearch.js</code>). 키가 없으면 자동으로
+      자유 입력만 남는 예비 상태로 돈다</li>
+    <li><strong>RSS(언론사 문화면)</strong> — 신문 기능은 별도 키 없이 돈다</li>
   </ul>
+  <div class="note">
+    <span class="tag">해결됨 · 2026.09.13</span>
+    <p><strong>알라딘 OpenAPI 종료</strong>(신규 키 발급 9월 4일 마감, 기존 키도 10월 30일 전면
+      중단)로 빠진 검색 자리를 <strong>카카오 책 검색 API</strong>로 메웠다. 무료로 즉시 발급되고,
+      검색·저자·출판사 정보는 충분히 된다. <code>KAKAO_REST_KEY</code>를 로컬 <code>.env</code>에
+      넣고 <code>node --env-file=.env server.js</code>로 실행하면 바로 켜진다 — 없어도 자유
+      입력으로 여전히 책은 등록되니 서비스가 막히진 않는다. 실제 키로 검색→추가까지 헤드리스
+      브라우저 검증 완료.</p>
+  </div>
+  <p>
+    아직 안 풀린 건 <strong>어필리에이트(수익)</strong> 쪽뿐이다. 카카오 책 검색은 구매 연결형
+    수수료를 기본 제공하지 않는다 — 교보문고·예스24 같은 서점별 제휴 프로그램을 따로 알아봐야
+    하는데, 이건 순수 비즈니스 판단(어느 서점과 제휴할지, 사업자 등록이 필요한지)이라 사용자가
+    정할 항목으로 남겨둔다.
+  </p>
+
+  <h3>지금 스키마는 관계형이 아니라 방 하나 = JSON 한 덩어리</h3>
+  <p>
+    원안은 <code>isbn</code>을 정본 키로 삼는 관계형 스키마(books·catalogs·quests·letters 분리)를
+    제안했지만, 실제 <code>store.js</code>는 훨씬 단순하다.
+  </p>
+<pre><code>su_users    code, id, pw, who, token, created_at
+su_rooms    code, <b>room jsonb</b>          -- 책장·가구·편지·흔적이 전부 이 한 덩어리 안에
+su_friends  code, friend
+su_libbind  key, lib_name                -- 마을 ↔ 실제 도서관 이름 매핑</code></pre>
+  <p>
+    지금 규모(개인 방 위주, 화이트리스트·기관 계약 없음)에는 이 편이 더 빠르고 옳은 선택이었다.
+    다만 원안의 <strong>3단계(어른/키즈 분리, 화이트리스트, 기관 계약)</strong>로 넘어가려는 순간
+    <code>room</code> 블롭 안에서 <code>isbn</code>·<code>tenant_id</code>를 꺼내 정규화하는 작업이
+    필요해진다 — 지금 당장 할 일은 아니고, 3단계 착수 직전에 한 번은 넘어야 할 고비로 기록해 둔다.
+  </p>
 </section>
 
 <footer>
-  도트 서재 · 제품 기획 초안 · 2026년 9월 4일<br>
-  동작하는 프로토타입 : <code>prototype\room.html</code>
+  도트 서재 · 제품 기획 · 초안 2026년 9월 4일 · 구현 상태 갱신 2026년 9월 13일<br>
+  동작하는 프로토타입 : <code>prototype\room.html</code> (서버 포함 실행: <code>node prototype/server.js</code>)
 </footer>
 
 </div>

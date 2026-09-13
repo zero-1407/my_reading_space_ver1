@@ -2,26 +2,30 @@
 //  도트 서재 — 개발용 서버 겸 API 프록시
 //
 //   1) prototype 폴더를 정적으로 서빙한다
-//   2) 공공데이터 API 를 대신 호출해 준다
-//        /api/expo   전시정보(통합)      API_CCA_145
-//        /api/books  기관별 도서정보     API_LIB_051
+//   2) 공공데이터 · 외부 API 를 대신 호출해 준다
+//        /api/expo        전시정보(통합)      API_CCA_145
+//        /api/books       기관별 도서정보     API_LIB_051
+//        /api/booksearch  실시간 책 검색      카카오 책 검색 API
 //
 //   왜 서버가 필요한가
 //    · file:// 에서는 브라우저가 fetch 를 막는다
-//    · 공공 API 는 CORS 헤더를 주지 않아 브라우저가 직접 못 부른다
+//    · 이 API들은 CORS 헤더를 주지 않아 브라우저가 직접 못 부른다
 //    · API 키가 브라우저에 노출되면 안 된다
 //   이 셋을 한 번에 푸는 게 프록시다. 실서비스에서도 같은 모양이다.
 //
 //   실행 (PowerShell)
 //     $env:KCISA_KEY = "발급받은 인증키"
+//     $env:KAKAO_REST_KEY = "카카오 REST API 키"
 //     node server.js
 //     → http://localhost:5173
 //
 //   키 발급
-//     https://www.culture.go.kr/data  →  오픈API  →  아래 두 개 활용신청
-//       · 한국문화정보원 외_전시정보(통합)      id=598
-//       · 한국문화정보원 외_기관별 도서정보      id=672
-//     둘 다 같은 인증키를 씁니다.
+//     · KCISA_KEY   https://www.culture.go.kr/data → 오픈API → 아래 두 개 활용신청
+//         한국문화정보원 외_전시정보(통합) id=598, 한국문화정보원 외_기관별 도서정보 id=672
+//         (둘 다 같은 인증키를 씁니다)
+//     · KAKAO_REST_KEY   https://developers.kakao.com → 내 애플리케이션 → 앱 키의
+//         "REST API 키". 책 검색 API는 별도 신청 없이 바로 쓸 수 있다.
+//         (알라딘 OpenAPI가 2026-10-30 종료돼 검색은 이쪽으로 옮겼다)
 // ════════════════════════════════════════════════════════════════
 
 const http = require('http');
@@ -43,6 +47,7 @@ const API = {
   expo:  'https://api.kcisa.kr/openapi/API_CCA_145/request',   // 전시정보(통합)
   books: 'https://api.kcisa.kr/openapi/API_LIB_051/request',   // 기관별 도서정보
 };
+const KAKAO_KEY = process.env.KAKAO_REST_KEY || '';
 
 // 도서관 신문대 — 문화면 RSS. 키가 필요 없다.
 // 제목·요약·링크만 보여주고 본문은 원문으로 보낸다 (저작권)
@@ -77,16 +82,16 @@ const MIME = {
 };
 
 // ── 요청 ─────────────────────────────────────────────────────
-function get(url) {
+function get(url, extraHeaders) {
   return new Promise((resolve, reject) => {
     const lib = url.startsWith('https') ? https : http;
     const req = lib.get(url, {
       timeout: 12000,
-      headers: { 'Accept':'application/json', 'User-Agent':'dot-seojae/0.1' },
+      headers: Object.assign({ 'Accept':'application/json', 'User-Agent':'dot-seojae/0.1' }, extraHeaders || {}),
     }, res => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume();
-        return get(new URL(res.headers.location, url).toString()).then(resolve, reject);
+        return get(new URL(res.headers.location, url).toString(), extraHeaders).then(resolve, reject);
       }
       let body = '';
       res.setEncoding('utf8');
@@ -213,6 +218,32 @@ async function loadNews() {
   cache.news = { at: Date.now(), data };
   console.log('[news] ' + data.length + '건 (' + FEEDS.length + '개 신문)');
   return data;
+}
+
+// ── 카카오 책 검색 — 타이핑할 때마다 실시간으로 찾는다 ─────────
+//  CATALOG(고정 목록)에 없는 책도 여기서 찾아 그대로 책장에 꽂을 수 있다.
+//  검색어별로 짧게 캐시해서 같은 글자를 여러 번 쳐도 API를 다시 부르지 않는다.
+const bookSearchCache = new Map();          // q -> { at, items }
+const BS_TTL = 1000 * 60 * 10;
+async function kakaoBookSearch(q) {
+  const hit = bookSearchCache.get(q);
+  if (hit && Date.now() - hit.at < BS_TTL) return hit.items;
+  if (!KAKAO_KEY) throw new Error('KAKAO_REST_KEY 가 비어 있습니다');
+  const qs = new URLSearchParams({ query: q, size: '10', target: 'title' });
+  const raw = await get('https://dapi.kakao.com/v3/search/book?' + qs,
+                         { Authorization: 'KakaoAK ' + KAKAO_KEY });
+  const j = JSON.parse(raw);
+  // 이 API는 category_name을 안 준다 — 대신 소개글(contents) 앞부분으로 분류를 대충 짐작한다
+  const items = (j.documents || []).map(d => ({
+    title:     clean(d.title || ''),
+    author:    (d.authors || []).join(', '),
+    publisher: clean(d.publisher || ''),
+    isbn:      (d.isbn || '').trim().split(' ').pop() || '',
+    desc:      clean(d.contents || '').slice(0, 200),
+  })).filter(b => b.title);
+  bookSearchCache.set(q, { at: Date.now(), items });
+  if (bookSearchCache.size > 300) bookSearchCache.delete(bookSearchCache.keys().next().value);
+  return items;
 }
 
 // ── 캐시 ─────────────────────────────────────────────────────
@@ -438,6 +469,21 @@ http.createServer(async (req, res) => {
     return;
   }
 
+  if (u.pathname === '/api/booksearch' && req.method === 'GET') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    const q = (u.searchParams.get('q') || '').trim().slice(0, 60);
+    if (!q) { res.end(JSON.stringify({ ok:true, items:[] })); return; }
+    try {
+      const items = await kakaoBookSearch(q);
+      res.end(JSON.stringify({ ok:true, items }));
+    } catch (e) {
+      console.log('[booksearch] 실패: ' + e.message);
+      res.end(JSON.stringify({ ok:false, reason:e.message, items:[] }));
+    }
+    return;
+  }
+
   const p = u.pathname === '/' ? '/room.html' : u.pathname;
   const file = path.join(ROOT, path.normalize(decodeURIComponent(p)).replace(/^([/\\])+/, ''));
   if (!file.startsWith(ROOT)) { res.statusCode = 403; return res.end('nope'); }
@@ -448,7 +494,8 @@ http.createServer(async (req, res) => {
   });
 }).listen(PORT, () => {
   console.log('도트 서재 → http://localhost:' + PORT);
-  console.log('  전시 API : ' + (KEYS.expo  ? '키 있음' : '키 없음 (예비 자료)'));
-  console.log('  도서 API : ' + (KEYS.books ? '키 있음' : '키 없음 (예비 자료)'));
-  console.log('  신문     : 키 불필요');
+  console.log('  전시 API   : ' + (KEYS.expo   ? '키 있음' : '키 없음 (예비 자료)'));
+  console.log('  도서 API   : ' + (KEYS.books  ? '키 있음' : '키 없음 (예비 자료)'));
+  console.log('  책 검색    : ' + (KAKAO_KEY   ? '키 있음 (카카오)' : '키 없음 — 자유 입력만 가능'));
+  console.log('  신문       : 키 불필요');
 });

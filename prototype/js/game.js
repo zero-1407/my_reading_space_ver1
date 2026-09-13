@@ -3148,7 +3148,7 @@ function openSearch() {
     el.onclick = () => { kdcFilter = n; openSearch(); };
     ch.appendChild(el);
   }
-  runSearch(); setTimeout(() => qEl.focus(), 30);
+  runSearch(); scheduleKakaoSearch(); setTimeout(() => qEl.focus(), 30);
   renderRealBooks(); Books.refresh(); renderWishCount();
 }
 Books.onChange(() => { autoBindAllVillages(); if (openOv === 'search') renderRealBooks(); });
@@ -3219,7 +3219,7 @@ function renderRealBooks() {
     box.appendChild(el);
   });
 }
-qEl.addEventListener('input', runSearch);
+qEl.addEventListener('input', () => { runSearch(); scheduleKakaoSearch(); });
 function runSearch() {
   const q = qEl.value.trim().toLowerCase(), mine = owned();
   const hits = CATALOG.filter(x => (!kdcFilter || x.kdc === kdcFilter) &&
@@ -3253,6 +3253,119 @@ function runSearch() {
     resEl.appendChild(el);
   }
 }
+
+// ── 카카오 책 검색 — CATALOG에 없어도 실시간으로 찾는다 ─────────
+//  카카오 책 검색 API는 category_name을 안 준다 — 대신 짧은 소개글(desc)에서
+//  키워드로 KDC를 대충 짐작한다. 못 맞추면 지금 고른 분류 칩, 그것도 없으면
+//  문학(800)으로 둔다 — 소개글 기반이라 정확하진 않지만, 수집용 분류라 크게 문제없다.
+function guessKdc(desc) {
+  const c = desc || '';
+  const rules = [
+    [/장편소설|단편소설|소설|시집|희곡|에세이|문학|라이트노벨|웹소설/, '800'],
+    [/역사|전기|평전/, '900'],
+    [/자연과학|물리학|생물학|천문학|수학/, '400'],
+    [/철학|심리학|인문학/, '100'],
+    [/종교|불교|기독교|명상/, '200'],
+    [/정치|경제학|사회학|법률|시사/, '300'],
+    [/프로그래밍|컴퓨터|개발자|공학|의학|건강/, '500'],
+    [/미술|음악|영화|만화|웹툰|대중문화/, '600'],
+    [/영어|일본어|중국어|외국어|언어학/, '700'],
+    [/사전|백과사전/, '000'],
+  ];
+  for (const [re, k] of rules) if (re.test(c)) return k;
+  return null;
+}
+let kakaoTimer = null, kakaoSeq = 0;
+function scheduleKakaoSearch() {
+  clearTimeout(kakaoTimer);
+  const q = qEl.value.trim();
+  const box = $('results-kakao'), cap = $('kakao-cap');
+  if (q.length < 2) { box.innerHTML = ''; cap.textContent = ''; return; }
+  cap.textContent = '검색 중…';
+  kakaoTimer = setTimeout(async () => {
+    const mySeq = ++kakaoSeq;
+    const items = await BookSearch.search(q);
+    if (mySeq !== kakaoSeq || qEl.value.trim() !== q) return;   // 그 사이 검색어가 바뀌었으면 버린다
+    renderKakaoResults(items, q);
+  }, 400);
+}
+function renderKakaoResults(items, q) {
+  const box = $('results-kakao'), cap = $('kakao-cap'), mine = owned();
+  if (!items.length) {
+    cap.textContent = BookSearch.lastNote || '“' + q + '”에 대한 검색 결과가 없어요';
+    box.innerHTML = ''; return;
+  }
+  cap.textContent = '“' + q + '” 검색 결과';
+  box.innerHTML = '';
+  items.forEach(x => {
+    const have = mine.has(x.title);
+    const kdc = guessKdc(x.desc) || kdcFilter || '800';
+    const col = CUSTOM_SPINE[hashStr(x.title) % CUSTOM_SPINE.length];
+    const el = document.createElement('button');
+    el.className = 'res' + (have ? ' have' : '');
+    el.innerHTML = '<span class="sp" style="background:' + col + '"></span>' +
+      '<span><span class="t">' + esc(x.title) + '</span><span class="a">' + esc(x.author || '') +
+      (x.publisher ? ' · ' + esc(x.publisher) : '') + '</span></span>' +
+      '<span class="k">' + (have ? '꽂혀 있음' : kdc + ' ' + kdcName(kdc)) + '</span>';
+    if (!have) {
+      el.onclick = () => {
+        addToMyShelf(Object.assign(makeCustomBook(x.title, x.author, kdc), { done:false, custom:true }));
+        Audio8.play('coin'); renderKakaoResults(items, q); renderWishCount();
+        toast('『' + x.title + '』를 책장에 꽂았어요');
+      };
+    }
+    box.appendChild(el);
+  });
+}
+
+// ── 목록에 없는 책 직접 추가 ─────────────────────────────────────
+//  CATALOG는 미리 고른 책만 있는 고정 목록이라, 진짜 읽고 있는 책이
+//  거기 없으면 지금까지는 책장에 꽂을 방법이 없었다. 제목만 있으면
+//  책등 색·높이·두께를 제목 해시로 정해서 바로 꽂아준다.
+const CUSTOM_SPINE = ['#c4564e','#e0a84e','#3f5f9e','#5aa0a8','#5f8a6a','#c98a5a','#8a6a3f',
+                       '#6b5a8a','#4a7a5f','#a85f7a','#3f6a9e','#7a5a4a','#9e6a3f','#5a8a9e'];
+function hashStr(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); }
+function makeCustomBook(t, a, kdc) {
+  const h = hashStr(t);
+  return b(t, a || '나만 아는 책', kdc, CUSTOM_SPINE[h % CUSTOM_SPINE.length],
+           12 + (h % 5), 3 + ((h >> 4) % 3), '');
+}
+let customKdcFilled = false;
+function fillCustomKdc() {
+  if (customKdcFilled) return; customKdcFilled = true;
+  $('custom-kdc').innerHTML = KDC.map(([n, name]) => '<option value="' + n + '">' + n + ' ' + name + '</option>').join('');
+}
+$('custom-open').onclick = e => {
+  e.preventDefault();
+  fillCustomKdc();
+  const form = $('custom-form');
+  const showing = form.style.display !== 'none';
+  form.style.display = showing ? 'none' : 'flex';
+  if (!showing) {
+    $('custom-title').value = qEl.value.trim();
+    $('custom-kdc').value = kdcFilter || '800';
+    setTimeout(() => $('custom-title').focus(), 20);
+  }
+};
+['custom-title', 'custom-author'].forEach(id =>
+  $(id).addEventListener('keydown', e => { if (e.key === 'Enter') $('custom-save').click(); }));
+$('custom-save').onclick = () => {
+  const t = $('custom-title').value.trim();
+  const a = $('custom-author').value.trim();
+  const kdc = $('custom-kdc').value || '800';
+  if (!t) { toast('책 제목을 적어주세요'); return; }
+  if (owned().has(t)) { toast('이미 책장에 있어요'); return; }
+  if (CATALOG.some(x => x.t.toLowerCase() === t.toLowerCase())) {
+    toast('목록에 있는 책이에요 — 위에서 검색해 추가해주세요'); return;
+  }
+  addToMyShelf(Object.assign(makeCustomBook(t, a, kdc), { done:false, custom:true }));
+  wishlist.delete(t);
+  Audio8.play('coin');
+  $('custom-form').style.display = 'none';
+  qEl.value = ''; runSearch(); renderWishCount();
+  toast('『' + t + '』를 책장에 꽂았어요');
+};
+
 function renderWishCount() {
   const el = $('wish-count'); if (el) el.textContent = wishlist.size;
 }
@@ -4731,8 +4844,24 @@ function drawItem(R, it, t) {
     case 'lamp':
       px(it.x - 8, it.y + 6, 26, 22, 'rgba(255,240,180,.16)');
       Art.drawArt(Art.LAMP_ART, it.x, it.y); break;
-    case 'plant':
-      Art.drawArt(Art.PLANT_ART, it.x, it.y - 4); break;
+    case 'plant': {
+      // 단순하게 — 화분(사다리꼴) 위에 뾰족한 잎이 부채처럼 퍼진 모양 (뭉친 공 대신 진짜 잎처럼)
+      const pw = it.w, ph = Math.round(it.h * .42), px0 = it.x, py0 = it.y + it.h - ph;
+      px(px0 + 1, py0, pw - 2, ph, '#B05A3E');
+      px(px0, py0, pw, 2, '#D9A468');
+      px(px0 + 1, py0 + ph - 1, pw - 2, 1, '#82603E');
+      const cx = it.x + it.w / 2, cy = py0, leafLen = it.h * .62, leafW = Math.max(2, it.w * .22);
+      const leaf = (a, rx, ry, c) => {
+        const lx = cx + Math.sin(a) * leafLen * .42, ly = cy - Math.cos(a) * leafLen * .8;
+        ctx.save(); ctx.translate(lx, ly); ctx.rotate(a);
+        ctx.fillStyle = c; ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      };
+      const angles = [-1.13, -.56, -.1, .38, .84, 1.31];
+      angles.forEach(a => leaf(a, leafW * .55 + .6, leafLen * .5 + .6, '#5E442C'));
+      angles.forEach(a => leaf(a, leafW * .55, leafLen * .5, '#788C60'));
+      break;
+    }
     case 'poster': {
       const on = isF('poster', 'it', it);
       if (on) { ctx.fillStyle = GLOW; ctx.fillRect(it.x - 3, it.y - 3, it.w + 6, it.h + 6); }

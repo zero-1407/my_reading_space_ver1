@@ -612,6 +612,19 @@
   .res.have { opacity:.45; cursor:default; }
   .res .wish { margin-left:8px; font-size:14px; background:none; border:none; cursor:pointer;
                opacity:.4; flex-shrink:0; }
+  #m-search .search-body { flex:1; min-height:0; overflow-y:auto; display:flex;
+                            flex-direction:column; }
+  #m-search .search-body .results { flex:none; overflow:visible; }
+  .more-box { background:var(--bg2); border:2px dashed var(--line2); padding:12px 14px 14px;
+              margin:4px 0 12px; flex-shrink:0; }
+  .more-box .hd { font-size:13px; margin-bottom:3px; }
+  .more-box .cap { margin-bottom:8px; min-height:15px; }
+  .more-box #results-kakao:not(:empty) { margin-bottom:10px; }
+  .more-box .btn.ghost { font-size:12px; padding:8px; }
+  .custom-form { display:flex; gap:6px; flex-shrink:0; margin-top:10px; }
+  .custom-form input[type=text] { flex:2; padding:9px 10px; font-size:12.5px; min-width:0; }
+  .custom-form select { flex:1.1; padding:9px 6px; font-size:11.5px; min-width:0; }
+  .custom-form .btn { flex-shrink:0; width:auto; padding:9px 14px; }
   .res .wish.on { opacity:1; }
   #wish-open { font-size:12px; }
   #wish-list { display:flex; flex-direction:column; gap:6px; overflow-y:auto; }
@@ -1068,10 +1081,27 @@
       <a href="#" id="wish-open">🔖 읽고 싶은 책 <span id="wish-count">0</span>개</a></div>
     <input id="q" type="text" placeholder="제목이나 저자를 입력하세요" autocomplete="off">
     <div class="chips" id="chips"></div>
-    <div class="results" id="results"></div>
-    <div class="hd" id="real-hd" style="margin-top:14px;font-size:13px">실제 도서관 장서</div>
-    <div class="cap" id="real-cap"></div>
-    <div class="results" id="results-real"></div>
+
+    <div class="search-body">
+      <div class="results" id="results"></div>
+
+      <div class="more-box">
+        <div class="hd" id="kakao-hd">더 찾아보기</div>
+        <div class="cap" id="kakao-cap"></div>
+        <div class="results" id="results-kakao"></div>
+        <button type="button" class="btn ghost" id="custom-open">✏️ 그래도 없으면 직접 추가하기</button>
+        <div class="custom-form" id="custom-form" style="display:none">
+          <input id="custom-title" type="text" placeholder="책 제목" maxlength="60">
+          <input id="custom-author" type="text" placeholder="저자(선택)" maxlength="40">
+          <select id="custom-kdc"></select>
+          <button class="btn" id="custom-save">꽂기</button>
+        </div>
+      </div>
+
+      <div class="hd" id="real-hd" style="margin-top:14px;font-size:13px">실제 도서관 장서</div>
+      <div class="cap" id="real-cap"></div>
+      <div class="results" id="results-real"></div>
+    </div>
     <div class="sub">Esc 로 닫기</div>
   </div></div>
 
@@ -1333,6 +1363,7 @@ if (location.search.indexOf('fresh') >= 0 && 'serviceWorker' in navigator) {
 <script src="js/season.js"></script>
 <script src="js/expo.js"></script>
 <script src="js/books.js"></script>
+<script src="js/booksearch.js"></script>
 <script src="js/news.js"></script>
 <script src="js/net.js"></script>
 <script src="js/gate.js"></script>
